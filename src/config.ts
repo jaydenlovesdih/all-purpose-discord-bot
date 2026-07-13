@@ -12,6 +12,6 @@ export const config = {
   token: requireEnv('DISCORD_TOKEN'),
   clientId: requireEnv('CLIENT_ID'),
   ownerId: requireEnv('OWNER_ID'),
-  prefix: process.env.PREFIX ?? '',
+  prefix: process.env.PREFIX ?? ',',
   isProduction: process.env.NODE_ENV === 'production',
 };
