@@ -1,6 +1,8 @@
 import { ChatInputCommandInteraction, GuildMember, PermissionResolvable } from 'discord.js';
 import { config } from '../config.js';
-import { BotClient } from '../types/index.js';
+import { PrefixCommandInteraction } from './prefixInteraction.js';
+
+type CommandInteractionLike = ChatInputCommandInteraction | PrefixCommandInteraction;
 
 export function isOwner(userId: string): boolean {
   return userId === config.ownerId;
@@ -8,6 +10,13 @@ export function isOwner(userId: string): boolean {
 
 export function canBypass(userId: string): boolean {
   return isOwner(userId);
+}
+
+function getMember(interaction: CommandInteractionLike): GuildMember | null {
+  if (interaction.member instanceof GuildMember) {
+    return interaction.member;
+  }
+  return null;
 }
 
 export function hasPermissions(
@@ -21,16 +30,16 @@ export function hasPermissions(
 }
 
 export async function ensurePermissions(
-  interaction: ChatInputCommandInteraction,
+  interaction: CommandInteractionLike,
   permissions: PermissionResolvable[],
 ): Promise<boolean> {
   if (canBypass(interaction.user.id)) return true;
 
-  const member = interaction.member as GuildMember | null;
+  const member = getMember(interaction);
   if (!member?.permissions.has(permissions)) {
     await interaction.reply({
       content: 'You do not have permission to use this command.',
-      ephemeral: true,
+      ephemeral: interaction instanceof ChatInputCommandInteraction,
     });
     return false;
   }
@@ -38,12 +47,12 @@ export async function ensurePermissions(
   return true;
 }
 
-export async function ensureOwner(interaction: ChatInputCommandInteraction): Promise<boolean> {
+export async function ensureOwner(interaction: CommandInteractionLike): Promise<boolean> {
   if (isOwner(interaction.user.id)) return true;
 
   await interaction.reply({
     content: 'This command is restricted to the bot owner.',
-    ephemeral: true,
+    ephemeral: interaction instanceof ChatInputCommandInteraction,
   });
   return false;
 }
@@ -65,8 +74,4 @@ export function formatUptime(ms: number): string {
 
 export function truncate(text: string, max = 1000): string {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
-}
-
-export function getClient(client: BotClient): BotClient {
-  return client;
 }
