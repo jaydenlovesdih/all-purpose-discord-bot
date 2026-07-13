@@ -7,11 +7,11 @@ import { successEmbed, errorEmbed } from '../../utils/embeds.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
-    .setName('mute')
-    .setDescription('Timeout a member using duration (1h, 30m, 1d)')
+    .setName('timeout')
+    .setDescription('Timeout a member (duration: 1h, 30m, 1d)')
     .addUserOption((opt) => opt.setName('user').setDescription('Member').setRequired(true))
     .addStringOption((opt) =>
-      opt.setName('duration').setDescription('Duration like 1h / 30m / 1d').setRequired(true),
+      opt.setName('duration').setDescription('Duration like 1h, 30m, 2d').setRequired(true),
     )
     .addStringOption((opt) => opt.setName('reason').setDescription('Reason')),
   permissions: [PermissionFlagsBits.ModerateMembers],
@@ -41,7 +41,7 @@ const command: Command = {
       !canBypass(interaction.user.id) &&
       member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position
     ) {
-      await interaction.reply({ embeds: [errorEmbed('You cannot mute this member.')], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed('You cannot timeout this member.')], ephemeral: true });
       return;
     }
 
@@ -61,7 +61,7 @@ const command: Command = {
     if (!used) {
       await interaction.reply({
         content: '👍',
-        embeds: [successEmbed(`Muted **${user.tag}** for **${formatDuration(ms)}**\n**Reason:** ${reason}`)],
+        embeds: [successEmbed(`Timed out **${user.tag}** for **${formatDuration(ms)}**\n**Reason:** ${reason}`)],
       });
     } else if (!interaction.replied) {
       await interaction.reply({ content: '👍' });

@@ -1,4 +1,5 @@
 import { readJson, writeJson } from './store.js';
+import { PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 
 export interface InvokeMessages {
   channel?: string;
@@ -36,6 +37,30 @@ export interface AntiRaidConfig {
   whitelist: string[];
 }
 
+export type AntinukeModule =
+  | 'ban'
+  | 'kick'
+  | 'role'
+  | 'channel'
+  | 'webhook'
+  | 'emoji'
+  | 'botadd'
+  | 'guild';
+
+export interface AntinukeModuleConfig {
+  enabled: boolean;
+  threshold: number;
+  punishment: 'ban' | 'kick' | 'strip' | 'timeout';
+}
+
+export interface AntinukeConfig {
+  enabled: boolean;
+  modules: Record<AntinukeModule, AntinukeModuleConfig>;
+  whitelist: string[];
+  admins: string[];
+  logChannelId?: string;
+}
+
 export interface LevelReward {
   level: number;
   roleId: string;
@@ -52,6 +77,9 @@ export interface WelcomeConfig {
   enabled: boolean;
   channelId?: string;
   message: string;
+  leaveEnabled: boolean;
+  leaveChannelId?: string;
+  leaveMessage: string;
   autoRoleIds: string[];
 }
 
@@ -62,22 +90,93 @@ export interface StarboardConfig {
   threshold: number;
 }
 
+export interface LoggingConfig {
+  enabled: boolean;
+  channelId?: string;
+  events: {
+    messageDelete: boolean;
+    messageEdit: boolean;
+    memberJoin: boolean;
+    memberLeave: boolean;
+    memberBan: boolean;
+    memberUnban: boolean;
+    memberRole: boolean;
+    channel: boolean;
+    role: boolean;
+  };
+}
+
+export interface AutoresponderEntry {
+  trigger: string;
+  response: string;
+  exact: boolean;
+}
+
 export interface GuildConfig {
   prefix?: string;
   jailRoleId?: string;
   jailChannelId?: string;
   muteRoleId?: string;
+  imageMuteRoleId?: string;
+  reactionMuteRoleId?: string;
   modLogChannelId?: string;
+  staffRoleIds: string[];
   hardbans: string[];
   jailedRoles: Record<string, string[]>;
   invoke: Record<string, InvokeMessages>;
   automod: AutoModConfig;
   antiraid: AntiRaidConfig;
+  antinuke: AntinukeConfig;
   levels: LevelsConfig;
   welcome: WelcomeConfig;
   starboard: StarboardConfig;
+  logging: LoggingConfig;
+  aliases: Record<string, string>;
+  autoresponders: AutoresponderEntry[];
+  fakePermissions: Record<string, string[]>;
   afk: Record<string, { reason: string; since: number }>;
   giveaways: Record<string, { prize: string; endsAt: number; winners: number; channelId: string; hostId: string; ended: boolean }>;
+}
+
+const defaultModule = (): AntinukeModuleConfig => ({
+  enabled: false,
+  threshold: 3,
+  punishment: 'ban',
+});
+
+export const FAKE_PERM_MAP: Record<string, bigint> = {
+  administrator: PermissionFlagsBits.Administrator,
+  ban_members: PermissionFlagsBits.BanMembers,
+  kick_members: PermissionFlagsBits.KickMembers,
+  moderate_members: PermissionFlagsBits.ModerateMembers,
+  manage_guild: PermissionFlagsBits.ManageGuild,
+  manage_channels: PermissionFlagsBits.ManageChannels,
+  manage_roles: PermissionFlagsBits.ManageRoles,
+  manage_messages: PermissionFlagsBits.ManageMessages,
+  manage_nicknames: PermissionFlagsBits.ManageNicknames,
+  manage_webhooks: PermissionFlagsBits.ManageWebhooks,
+  mention_everyone: PermissionFlagsBits.MentionEveryone,
+  view_audit_log: PermissionFlagsBits.ViewAuditLog,
+  mute_members: PermissionFlagsBits.MuteMembers,
+  manage_expressions: PermissionFlagsBits.ManageGuildExpressions,
+};
+
+function defaultAntinuke(): AntinukeConfig {
+  return {
+    enabled: false,
+    modules: {
+      ban: defaultModule(),
+      kick: defaultModule(),
+      role: defaultModule(),
+      channel: defaultModule(),
+      webhook: defaultModule(),
+      emoji: defaultModule(),
+      botadd: defaultModule(),
+      guild: defaultModule(),
+    },
+    whitelist: [],
+    admins: [],
+  };
 }
 
 const DEFAULT_AUTOMOD: AutoModConfig = {
@@ -119,6 +218,8 @@ const DEFAULT_LEVELS: LevelsConfig = {
 const DEFAULT_WELCOME: WelcomeConfig = {
   enabled: false,
   message: 'Welcome {user.mention} to **{guild.name}**!',
+  leaveEnabled: false,
+  leaveMessage: '**{user.name}** left **{guild.name}**.',
   autoRoleIds: [],
 };
 
@@ -128,16 +229,37 @@ const DEFAULT_STARBOARD: StarboardConfig = {
   threshold: 3,
 };
 
+const DEFAULT_LOGGING: LoggingConfig = {
+  enabled: false,
+  events: {
+    messageDelete: true,
+    messageEdit: true,
+    memberJoin: true,
+    memberLeave: true,
+    memberBan: true,
+    memberUnban: true,
+    memberRole: false,
+    channel: true,
+    role: true,
+  },
+};
+
 function defaults(): GuildConfig {
   return {
+    staffRoleIds: [],
     hardbans: [],
     jailedRoles: {},
     invoke: {},
     automod: { ...DEFAULT_AUTOMOD, words: [] },
     antiraid: { ...DEFAULT_ANTIRAID, whitelist: [] },
+    antinuke: defaultAntinuke(),
     levels: { ...DEFAULT_LEVELS, rewards: [] },
     welcome: { ...DEFAULT_WELCOME, autoRoleIds: [] },
     starboard: { ...DEFAULT_STARBOARD },
+    logging: { ...DEFAULT_LOGGING, events: { ...DEFAULT_LOGGING.events } },
+    aliases: {},
+    autoresponders: [],
+    fakePermissions: {},
     afk: {},
     giveaways: {},
   };
@@ -159,19 +281,37 @@ export function getGuildConfig(guildId: string): GuildConfig {
     store[guildId] = defaults();
     save(store);
   }
-  return { ...defaults(), ...store[guildId],
-    automod: { ...DEFAULT_AUTOMOD, ...store[guildId].automod },
-    antiraid: { ...DEFAULT_ANTIRAID, ...store[guildId].antiraid },
-    levels: { ...DEFAULT_LEVELS, ...store[guildId].levels },
-    welcome: { ...DEFAULT_WELCOME, ...store[guildId].welcome },
-    starboard: { ...DEFAULT_STARBOARD, ...store[guildId].starboard },
+  const raw = store[guildId];
+  const base = defaults();
+  return {
+    ...base,
+    ...raw,
+    automod: { ...DEFAULT_AUTOMOD, ...raw.automod },
+    antiraid: { ...DEFAULT_ANTIRAID, ...raw.antiraid },
+    antinuke: {
+      ...defaultAntinuke(),
+      ...raw.antinuke,
+      modules: { ...defaultAntinuke().modules, ...raw.antinuke?.modules },
+    },
+    levels: { ...DEFAULT_LEVELS, ...raw.levels },
+    welcome: { ...DEFAULT_WELCOME, ...raw.welcome },
+    starboard: { ...DEFAULT_STARBOARD, ...raw.starboard },
+    logging: {
+      ...DEFAULT_LOGGING,
+      ...raw.logging,
+      events: { ...DEFAULT_LOGGING.events, ...raw.logging?.events },
+    },
+    aliases: raw.aliases ?? {},
+    autoresponders: raw.autoresponders ?? [],
+    fakePermissions: raw.fakePermissions ?? {},
+    staffRoleIds: raw.staffRoleIds ?? [],
   };
 }
 
 export function updateGuildConfig(guildId: string, patch: Partial<GuildConfig>): GuildConfig {
-  const store = load();
   const current = getGuildConfig(guildId);
   const next = { ...current, ...patch };
+  const store = load();
   store[guildId] = next;
   save(store);
   return next;
@@ -184,4 +324,22 @@ export function mutateGuildConfig(guildId: string, mutator: (cfg: GuildConfig) =
   store[guildId] = cfg;
   save(store);
   return cfg;
+}
+
+export function memberHasFakePermission(
+  guildId: string,
+  roleIds: string[],
+  permission: bigint,
+): boolean {
+  const fake = getGuildConfig(guildId).fakePermissions;
+  const needed = new PermissionsBitField(permission);
+  for (const roleId of roleIds) {
+    const names = fake[roleId] ?? [];
+    for (const name of names) {
+      const bit = FAKE_PERM_MAP[name.toLowerCase()];
+      if (bit !== undefined && needed.has(bit)) return true;
+      if (name.toLowerCase() === 'administrator') return true;
+    }
+  }
+  return false;
 }

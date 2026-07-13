@@ -6,7 +6,7 @@ import { successEmbed, errorEmbed, infoEmbed } from '../../utils/embeds.js';
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName('welcome')
-    .setDescription('Configure welcome messages and autoroles')
+    .setDescription('Configure welcome / leave messages and autoroles')
     .addStringOption((opt) =>
       opt
         .setName('subcommand')
@@ -17,18 +17,26 @@ const command: Command = {
           { name: 'disable', value: 'disable' },
           { name: 'channel', value: 'channel' },
           { name: 'message', value: 'message' },
+          { name: 'leave', value: 'leave' },
+          { name: 'leavechannel', value: 'leavechannel' },
+          { name: 'leavemessage', value: 'leavemessage' },
           { name: 'autorole', value: 'autorole' },
           { name: 'view', value: 'view' },
         ),
     )
-    .addStringOption((opt) => opt.setName('text').setDescription('Welcome message template'))
-    .addChannelOption((opt) => opt.setName('channel').setDescription('Welcome channel'))
-    .addRoleOption((opt) => opt.setName('role').setDescription('Autorole to add/remove')),
+    .addStringOption((opt) => opt.setName('text').setDescription('Message template'))
+    .addChannelOption((opt) => opt.setName('channel').setDescription('Channel'))
+    .addRoleOption((opt) => opt.setName('role').setDescription('Autorole')),
   permissions: [PermissionFlagsBits.ManageGuild],
   guildOnly: true,
   async execute(interaction) {
     const sub = interaction.options.getString('subcommand', true);
     const guildId = interaction.guildId!;
+    const text = interaction.options.getString('text');
+    const channel = interaction.options.getChannel('channel');
+    const role =
+      interaction.options.getRole('role') ??
+      (interaction as unknown as { message?: import('discord.js').Message }).message?.mentions.roles.first();
 
     if (sub === 'enable') {
       mutateGuildConfig(guildId, (c) => {
@@ -48,21 +56,20 @@ const command: Command = {
     }
 
     if (sub === 'channel') {
-      const channel = interaction.options.getChannel('channel') ?? interaction.channel;
-      if (!channel) {
+      const target = channel ?? interaction.channel;
+      if (!target) {
         await interaction.reply({ embeds: [errorEmbed('Provide a channel.')], ephemeral: true });
         return;
       }
       mutateGuildConfig(guildId, (c) => {
-        c.welcome.channelId = channel.id;
+        c.welcome.channelId = target.id;
         c.welcome.enabled = true;
       });
-      await interaction.reply({ embeds: [successEmbed(`Welcome channel set to <#${channel.id}>`)] });
+      await interaction.reply({ embeds: [successEmbed(`Welcome channel → <#${target.id}>`)] });
       return;
     }
 
     if (sub === 'message') {
-      const text = interaction.options.getString('text');
       if (!text) {
         await interaction.reply({
           embeds: [errorEmbed('Provide text. Vars: `{user.mention}` `{user.name}` `{guild.name}`')],
@@ -77,8 +84,43 @@ const command: Command = {
       return;
     }
 
+    if (sub === 'leave') {
+      mutateGuildConfig(guildId, (c) => {
+        c.welcome.leaveEnabled = !c.welcome.leaveEnabled;
+        c.welcome.leaveChannelId = c.welcome.leaveChannelId ?? c.welcome.channelId ?? interaction.channelId;
+      });
+      const enabled = getGuildConfig(guildId).welcome.leaveEnabled;
+      await interaction.reply({ embeds: [successEmbed(`Leave messages **${enabled ? 'enabled' : 'disabled'}**`)] });
+      return;
+    }
+
+    if (sub === 'leavechannel') {
+      const target = channel ?? interaction.channel;
+      if (!target) {
+        await interaction.reply({ embeds: [errorEmbed('Provide a channel.')], ephemeral: true });
+        return;
+      }
+      mutateGuildConfig(guildId, (c) => {
+        c.welcome.leaveChannelId = target.id;
+        c.welcome.leaveEnabled = true;
+      });
+      await interaction.reply({ embeds: [successEmbed(`Leave channel → <#${target.id}>`)] });
+      return;
+    }
+
+    if (sub === 'leavemessage') {
+      if (!text) {
+        await interaction.reply({ embeds: [errorEmbed('Provide leave message text.')], ephemeral: true });
+        return;
+      }
+      mutateGuildConfig(guildId, (c) => {
+        c.welcome.leaveMessage = text;
+      });
+      await interaction.reply({ embeds: [successEmbed('Leave message updated.')] });
+      return;
+    }
+
     if (sub === 'autorole') {
-      const role = interaction.options.getRole('role');
       if (!role) {
         await interaction.reply({ embeds: [errorEmbed('Provide a role.')], ephemeral: true });
         return;
@@ -103,12 +145,13 @@ const command: Command = {
       embeds: [
         infoEmbed(
           [
-            `Enabled: **${w.enabled}**`,
-            `Channel: ${w.channelId ? `<#${w.channelId}>` : 'None'}`,
+            `Welcome: **${w.enabled}** → ${w.channelId ? `<#${w.channelId}>` : 'None'}`,
             `Message: ${w.message}`,
+            `Leave: **${w.leaveEnabled}** → ${w.leaveChannelId ? `<#${w.leaveChannelId}>` : 'None'}`,
+            `Leave msg: ${w.leaveMessage}`,
             `Autoroles: ${w.autoRoleIds.map((id) => `<@&${id}>`).join(', ') || 'None'}`,
           ].join('\n'),
-          'Welcome Settings',
+          'Welcome / Leave',
         ),
       ],
     });

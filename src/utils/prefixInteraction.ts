@@ -1,4 +1,4 @@
-import { GuildMember, Message, MessagePayload, User, ChannelType } from 'discord.js';
+import { GuildMember, Message, MessagePayload, User } from 'discord.js';
 import { PrefixArgDef, prefixSchemas } from './prefixSchemas.js';
 
 type ReplyPayload = string | MessagePayload | import('discord.js').InteractionReplyOptions;
@@ -336,11 +336,7 @@ export function asSlashInteraction(
 }
 
 export function isTextCommandChannel(channel: Message['channel']): boolean {
-  return (
-    channel.isTextBased() &&
-    !channel.isDMBased() &&
-    ('type' in channel ? channel.type === ChannelType.GuildText : true)
-  );
+  return channel.isTextBased() && !channel.isDMBased();
 }
 
 export function buildMissingArgsMessage(command: string, prefix = '.'): string {

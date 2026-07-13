@@ -39,7 +39,12 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   ],
   mute: [
     { name: 'user', type: 'user', required: true },
-    { name: 'minutes', type: 'integer', required: true },
+    { name: 'duration', type: 'string', required: true },
+    { name: 'reason', type: 'rest' },
+  ],
+  timeout: [
+    { name: 'user', type: 'user', required: true },
+    { name: 'duration', type: 'string', required: true },
     { name: 'reason', type: 'rest' },
   ],
   unmute: [{ name: 'user', type: 'user', required: true }],
@@ -72,6 +77,28 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'subcommand', type: 'string', required: true },
     { name: 'value', type: 'string' },
     { name: 'threshold', type: 'integer' },
+  ],
+  antinuke: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'value', type: 'string' },
+    { name: 'threshold', type: 'integer' },
+  ],
+  fakepermissions: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'permissions', type: 'rest' },
+  ],
+  alias: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'alias', type: 'string' },
+    { name: 'command', type: 'string' },
+  ],
+  autoresponder: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'trigger', type: 'string' },
+    { name: 'response', type: 'rest' },
+  ],
+  logging: [
+    { name: 'subcommand', type: 'string', required: true },
   ],
   invoke: [
     { name: 'subcommand', type: 'string', required: true },

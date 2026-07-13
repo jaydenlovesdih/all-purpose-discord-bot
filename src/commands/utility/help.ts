@@ -5,6 +5,25 @@ import { Colors } from '../../utils/embeds.js';
 import { formatUptime } from '../../utils/permissions.js';
 import { getPrefix } from '../../utils/setup.js';
 
+function categorize(name: string): string {
+  if (
+    [
+      'ban', 'kick', 'mute', 'timeout', 'unmute', 'purge', 'warn', 'warnings', 'clearwarnings', 'role',
+      'setup', 'jail', 'unjail', 'softban', 'hardban', 'unban', 'strip', 'filter', 'antiraid', 'antinuke',
+    ].includes(name)
+  ) {
+    return 'Moderation & Security';
+  }
+  if (['eval', 'say', 'embed', 'invoke', 'prefix', 'fakepermissions', 'alias', 'autoresponder', 'logging'].includes(name)) {
+    return 'Admin';
+  }
+  if (['8ball', 'coinflip'].includes(name)) return 'Fun';
+  if (['welcome', 'levels', 'starboard', 'giveaway', 'afk', 'snipe', 'editsnipe', 'clearsnipe'].includes(name)) {
+    return 'Server Systems';
+  }
+  return 'Utility';
+}
+
 const command: Command = {
   data: new SlashCommandBuilder().setName('help').setDescription('List all available commands'),
   async execute(interaction, client) {
@@ -13,19 +32,9 @@ const command: Command = {
 
     for (const cmd of client.commands.values()) {
       const name = cmd.data.name;
-      const category =
-        ['ban', 'kick', 'mute', 'unmute', 'purge', 'warn', 'warnings', 'clearwarnings', 'role', 'setup', 'jail', 'unjail', 'softban', 'hardban', 'unban', 'strip', 'filter', 'antiraid'].includes(name)
-          ? 'Moderation & Security'
-          : ['eval', 'say', 'embed', 'invoke', 'prefix'].includes(name)
-            ? 'Admin'
-            : ['8ball', 'coinflip'].includes(name)
-              ? 'Fun'
-              : ['welcome', 'levels', 'starboard', 'giveaway', 'afk', 'snipe', 'editsnipe', 'clearsnipe'].includes(name)
-                ? 'Server Systems'
-                : 'Utility';
-
+      const category = categorize(name);
       if (!categories.has(category)) categories.set(category, []);
-      categories.get(category)!.push(`\`${prefix}${name}\` / \`/${name}\` — ${cmd.data.description}`);
+      categories.get(category)!.push(`\`${prefix}${name}\` — ${cmd.data.description}`);
     }
 
     const fields = [...categories.entries()].map(([name, cmds]) => ({
@@ -39,9 +48,9 @@ const command: Command = {
           color: Colors.primary,
           title: 'Command Help',
           description:
-            `Prefix: \`${prefix}\` (change with \`${prefix}prefix\`)\n` +
-            `Owner bypass ID: \`${config.ownerId}\`\n` +
-            `Quick start: \`${prefix}setup\` → \`${prefix}filter setup\` → \`${prefix}welcome enable\``,
+            `Prefix: \`${prefix}\` · Change: \`${prefix}prefix\`\n` +
+            `Owner bypass: \`${config.ownerId}\`\n` +
+            `**Quick start:** \`${prefix}setup\` → \`${prefix}filter setup\` → \`${prefix}antinuke toggle\` → \`${prefix}logging enable\``,
           fields,
           footer: { text: `${client.commands.size} commands | Uptime: ${formatUptime(client.uptime ?? 0)}` },
           timestamp: new Date().toISOString(),

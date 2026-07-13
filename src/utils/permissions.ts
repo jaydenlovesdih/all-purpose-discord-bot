@@ -1,6 +1,13 @@
-import { ChatInputCommandInteraction, GuildMember, PermissionResolvable } from 'discord.js';
+import {
+  GuildMember,
+  PermissionFlagsBits,
+  PermissionResolvable,
+  PermissionsBitField,
+} from 'discord.js';
 import { config } from '../config.js';
+import { getGuildConfig, memberHasFakePermission } from './guildConfig.js';
 import { PrefixCommandInteraction } from './prefixInteraction.js';
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 type CommandInteractionLike = ChatInputCommandInteraction | PrefixCommandInteraction;
 
@@ -12,11 +19,14 @@ export function canBypass(userId: string): boolean {
   return isOwner(userId);
 }
 
-function getMember(interaction: CommandInteractionLike): GuildMember | null {
-  if (interaction.member instanceof GuildMember) {
-    return interaction.member;
+async function resolveMember(interaction: CommandInteractionLike): Promise<GuildMember | null> {
+  if (interaction.member instanceof GuildMember) return interaction.member;
+  if (!interaction.guild) return null;
+  try {
+    return await interaction.guild.members.fetch(interaction.user.id);
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export function hasPermissions(
@@ -26,7 +36,14 @@ export function hasPermissions(
 ): boolean {
   if (canBypass(userId)) return true;
   if (!member) return false;
-  return member.permissions.has(permissions);
+  if (member.permissions.has(permissions)) return true;
+
+  const bits = new PermissionsBitField(permissions);
+  return memberHasFakePermission(
+    member.guild.id,
+    [...member.roles.cache.keys()],
+    bits.bitfield,
+  );
 }
 
 export async function ensurePermissions(
@@ -35,11 +52,11 @@ export async function ensurePermissions(
 ): Promise<boolean> {
   if (canBypass(interaction.user.id)) return true;
 
-  const member = getMember(interaction);
-  if (!member?.permissions.has(permissions)) {
+  const member = await resolveMember(interaction);
+  if (!hasPermissions(member, permissions, interaction.user.id)) {
     await interaction.reply({
       content: 'You do not have permission to use this command.',
-      ephemeral: interaction instanceof ChatInputCommandInteraction,
+      ephemeral: !(interaction instanceof PrefixCommandInteraction),
     });
     return false;
   }
@@ -52,7 +69,7 @@ export async function ensureOwner(interaction: CommandInteractionLike): Promise<
 
   await interaction.reply({
     content: 'This command is restricted to the bot owner.',
-    ephemeral: interaction instanceof ChatInputCommandInteraction,
+    ephemeral: !(interaction instanceof PrefixCommandInteraction),
   });
   return false;
 }
@@ -75,3 +92,5 @@ export function formatUptime(ms: number): string {
 export function truncate(text: string, max = 1000): string {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
+
+export { PermissionFlagsBits };
