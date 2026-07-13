@@ -1,20 +1,23 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
-import { infoEmbed } from '../../utils/embeds.js';
+import { Colors } from '../../utils/embeds.js';
 
 const command: Command = {
-  data: new SlashCommandBuilder().setName('ping').setDescription('Check bot latency and API response time'),
+  data: new SlashCommandBuilder().setName('ping').setDescription('Check bot latency'),
   async execute(interaction) {
-    const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
+    const sent = await interaction.reply({ content: 'ping...', fetchReply: true });
     const roundtrip = sent.createdTimestamp - interaction.createdTimestamp;
     const ws = interaction.client.ws.ping;
 
-    const embed = infoEmbed(
-      `**Roundtrip:** ${roundtrip}ms\n**WebSocket:** ${ws}ms`,
-      'Pong!',
-    ).setTimestamp();
-
-    await interaction.editReply({ content: null, embeds: [embed] });
+    // Greed-style compact latency box
+    await interaction.editReply({
+      content: null,
+      embeds: [
+        new EmbedBuilder()
+          .setColor(Colors.log)
+          .setDescription(`\`${roundtrip}ms (edit: ${ws}ms)\``),
+      ],
+    });
   },
 };
 

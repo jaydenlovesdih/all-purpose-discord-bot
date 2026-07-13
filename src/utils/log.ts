@@ -1,13 +1,14 @@
-import { ColorResolvable, EmbedBuilder, Guild, TextChannel } from 'discord.js';
+import { ColorResolvable, Guild, TextChannel } from 'discord.js';
 import { getGuildConfig } from './guildConfig.js';
-import { Colors } from './embeds.js';
+import { caseLog, Colors } from './embeds.js';
 
 export async function sendLog(
   guild: Guild,
   event: keyof ReturnType<typeof getGuildConfig>['logging']['events'],
   title: string,
   description: string,
-  color: ColorResolvable = Colors.info,
+  color: ColorResolvable = Colors.log,
+  opts?: { content?: string; contentLabel?: string; footer?: string; iconURL?: string },
 ): Promise<void> {
   const cfg = getGuildConfig(guild.id);
   if (!cfg.logging.enabled || !cfg.logging.events[event]) return;
@@ -16,9 +17,21 @@ export async function sendLog(
   const channel = guild.channels.cache.get(channelId);
   if (!channel?.isTextBased() || !channel.isSendable()) return;
 
+  const colorNum = typeof color === 'number' ? color : Colors.log;
+
   await (channel as TextChannel)
     .send({
-      embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).setTimestamp()],
+      embeds: [
+        caseLog({
+          title,
+          description,
+          content: opts?.content,
+          contentLabel: opts?.contentLabel,
+          footer: opts?.footer,
+          iconURL: opts?.iconURL,
+          color: colorNum,
+        }),
+      ],
     })
     .catch(() => undefined);
 }

@@ -3,7 +3,7 @@ import { Command } from '../../types/index.js';
 import { canBypass } from '../../utils/permissions.js';
 import { sendInvoke } from '../../utils/moderation.js';
 import { parseDurationMs, formatDuration } from '../../utils/duration.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { ok, fail } from '../../utils/embeds.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -24,7 +24,7 @@ const command: Command = {
 
     if (!ms || ms < 5_000 || ms > 28 * 86_400_000) {
       await interaction.reply({
-        embeds: [errorEmbed('Invalid duration. Examples: `10m`, `1h`, `1d`, `2d3h` (max 28d).')],
+        embeds: [fail(interaction.user, 'Invalid duration. Examples: `10m`, `1h`, `1d`, `2d3h`')],
         ephemeral: true,
       });
       return;
@@ -33,7 +33,7 @@ const command: Command = {
     let member = interaction.guild!.members.cache.get(user.id) ?? null;
     if (!member) member = await interaction.guild!.members.fetch(user.id).catch(() => null);
     if (!member) {
-      await interaction.reply({ embeds: [errorEmbed('That user is not in this server.')], ephemeral: true });
+      await interaction.reply({ embeds: [fail(interaction.user, 'That user is not in this server')], ephemeral: true });
       return;
     }
 
@@ -41,7 +41,7 @@ const command: Command = {
       !canBypass(interaction.user.id) &&
       member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position
     ) {
-      await interaction.reply({ embeds: [errorEmbed('You cannot timeout this member.')], ephemeral: true });
+      await interaction.reply({ embeds: [fail(interaction.user, 'You cannot timeout this member')], ephemeral: true });
       return;
     }
 
@@ -58,13 +58,13 @@ const command: Command = {
       interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
     );
 
-    if (!used) {
+    if (used) {
+      await interaction.reply({ content: '👍' });
+    } else {
       await interaction.reply({
         content: '👍',
-        embeds: [successEmbed(`Timed out **${user.tag}** for **${formatDuration(ms)}**\n**Reason:** ${reason}`)],
+        embeds: [ok(interaction.user, `timed out ${user} for \`${formatDuration(ms)}\` · **${reason}**`)],
       });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: '👍' });
     }
   },
 };

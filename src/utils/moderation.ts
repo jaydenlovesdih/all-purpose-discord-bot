@@ -1,6 +1,6 @@
 import { EmbedBuilder, Guild, GuildMember, TextChannel, User } from 'discord.js';
-import { getGuildConfig } from './guildConfig.js';
-import { Colors } from './embeds.js';
+import { getGuildConfig, mutateGuildConfig } from './guildConfig.js';
+import { caseLog, Colors, ok } from './embeds.js';
 
 export interface ModActionContext {
   guild: Guild;
@@ -41,24 +41,37 @@ function applyVars(template: string, ctx: ModActionContext): string {
   return out;
 }
 
-export async function sendModLog(ctx: ModActionContext): Promise<void> {
+function nextCaseId(guildId: string): number {
+  let id = 1;
+  mutateGuildConfig(guildId, (c) => {
+    const current = (c as { caseId?: number }).caseId ?? 0;
+    id = current + 1;
+    (c as { caseId?: number }).caseId = id;
+  });
+  return id;
+}
+
+export async function sendModLog(ctx: ModActionContext): Promise<number> {
   const cfg = getGuildConfig(ctx.guild.id);
-  if (!cfg.modLogChannelId) return;
+  const caseId = nextCaseId(ctx.guild.id);
+  if (!cfg.modLogChannelId) return caseId;
 
   const channel = ctx.guild.channels.cache.get(cfg.modLogChannelId);
-  if (!channel?.isTextBased()) return;
+  if (!channel?.isTextBased() || !('send' in channel)) return caseId;
 
-  const embed = new EmbedBuilder()
-    .setColor(Colors.warning)
-    .setTitle(`Moderation · ${ctx.action}`)
-    .addFields(
-      { name: 'User', value: `${ctx.user.tag} (\`${ctx.user.id}\`)`, inline: true },
-      { name: 'Moderator', value: `${ctx.moderator.tag}`, inline: true },
-      { name: 'Reason', value: ctx.reason ?? 'No reason provided' },
-    )
-    .setTimestamp();
+  const actionLabel = ctx.action.charAt(0).toUpperCase() + ctx.action.slice(1);
+  const embed = caseLog({
+    title: `Case #${caseId} · ${actionLabel}`,
+    iconURL: ctx.user.displayAvatarURL(),
+    description:
+      `${ctx.user} was **${ctx.action}ed** by ${ctx.moderator}\n` +
+      `**Reason:** ${ctx.reason ?? 'No reason provided'}`,
+    footer: `User ID: ${ctx.user.id}`,
+    color: Colors.log,
+  });
 
   await (channel as TextChannel).send({ embeds: [embed] }).catch(() => undefined);
+  return caseId;
 }
 
 export async function sendInvoke(ctx: ModActionContext, channel?: TextChannel | null): Promise<boolean> {
@@ -70,14 +83,15 @@ export async function sendInvoke(ctx: ModActionContext, channel?: TextChannel | 
     usedCustom = true;
     const content = applyVars(invoke.channel, ctx);
     if (content.includes('{embed}')) {
-      await channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(Colors.primary)
-            .setDescription(content.replace('{embed}', '').trim())
-            .setTimestamp(),
-        ],
-      }).catch(() => undefined);
+      await channel
+        .send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(Colors.log)
+              .setDescription(content.replace('{embed}', '').replaceAll('$v', '\n').trim()),
+          ],
+        })
+        .catch(() => undefined);
     } else {
       await channel.send(content).catch(() => undefined);
     }
@@ -91,6 +105,21 @@ export async function sendInvoke(ctx: ModActionContext, channel?: TextChannel | 
 
   await sendModLog(ctx);
   return usedCustom;
+}
+
+/** Bleed default mod confirm: just 👍 when no custom invoke message */
+export async function modConfirm(
+  reply: (payload: { content?: string; embeds?: EmbedBuilder[] }) => Promise<unknown>,
+  ctx: ModActionContext,
+  usedInvoke: boolean,
+  successText: string,
+): Promise<void> {
+  if (usedInvoke) {
+    await reply({ content: '👍' });
+    return;
+  }
+  // Bleed default is thumbs up; also send a compact ok line for clarity
+  await reply({ content: '👍', embeds: [ok(ctx.moderator, successText)] });
 }
 
 export async function stripRoles(member: GuildMember, keepId?: string): Promise<string[]> {

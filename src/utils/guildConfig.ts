@@ -136,6 +136,7 @@ export interface GuildConfig {
   fakePermissions: Record<string, string[]>;
   afk: Record<string, { reason: string; since: number }>;
   giveaways: Record<string, { prize: string; endsAt: number; winners: number; channelId: string; hostId: string; ended: boolean }>;
+  caseId?: number;
 }
 
 const defaultModule = (): AntinukeModuleConfig => ({

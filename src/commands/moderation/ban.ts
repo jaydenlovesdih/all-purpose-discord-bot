@@ -2,7 +2,7 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { canBypass } from '../../utils/permissions.js';
 import { sendInvoke } from '../../utils/moderation.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { ok, fail } from '../../utils/embeds.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -22,17 +22,17 @@ const command: Command = {
     const member = interaction.guild!.members.cache.get(user.id);
 
     if (user.id === interaction.user.id) {
-      await interaction.reply({ embeds: [errorEmbed('You cannot ban yourself.')], ephemeral: true });
+      await interaction.reply({ embeds: [fail(interaction.user, 'You cannot ban yourself')], ephemeral: true });
       return;
     }
 
     if (member && !canBypass(interaction.user.id)) {
       if (!member.bannable) {
-        await interaction.reply({ embeds: [errorEmbed('I cannot ban this member.')], ephemeral: true });
+        await interaction.reply({ embeds: [fail(interaction.user, 'I cannot ban this member')], ephemeral: true });
         return;
       }
       if (member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position) {
-        await interaction.reply({ embeds: [errorEmbed('You cannot ban someone with equal or higher roles.')], ephemeral: true });
+        await interaction.reply({ embeds: [fail(interaction.user, 'You cannot ban someone with equal or higher roles')], ephemeral: true });
         return;
       }
     }
@@ -42,10 +42,14 @@ const command: Command = {
       { guild: interaction.guild!, action: 'ban', user, moderator: interaction.user, reason },
       interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
     );
-    if (!used) {
-      await interaction.reply({ embeds: [successEmbed(`Banned **${user.tag}**\n**Reason:** ${reason}`)] });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: 'Done.', ephemeral: true });
+
+    if (used) {
+      await interaction.reply({ content: '👍' });
+    } else {
+      await interaction.reply({
+        content: '👍',
+        embeds: [ok(interaction.user, `banned ${user} for **${reason}**`)],
+      });
     }
   },
 };

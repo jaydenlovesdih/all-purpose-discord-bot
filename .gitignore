@@ -4,5 +4,6 @@ dist/
 .env.local
 *.log
 data/
+.tmp-docs/
 .DS_Store
 Thumbs.db
