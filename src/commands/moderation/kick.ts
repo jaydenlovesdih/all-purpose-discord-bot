@@ -1,6 +1,7 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { canBypass } from '../../utils/permissions.js';
+import { sendInvoke } from '../../utils/moderation.js';
 import { successEmbed, errorEmbed } from '../../utils/embeds.js';
 
 const command: Command = {
@@ -33,9 +34,15 @@ const command: Command = {
     }
 
     await member.kick(reason);
-    await interaction.reply({
-      embeds: [successEmbed(`Kicked **${user.tag}**\n**Reason:** ${reason}`)],
-    });
+    const used = await sendInvoke(
+      { guild: interaction.guild!, action: 'kick', user, moderator: interaction.user, reason },
+      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+    );
+    if (!used) {
+      await interaction.reply({ embeds: [successEmbed(`Kicked **${user.tag}**\n**Reason:** ${reason}`)] });
+    } else if (!interaction.replied) {
+      await interaction.reply({ content: 'Done.', ephemeral: true });
+    }
   },
 };
 

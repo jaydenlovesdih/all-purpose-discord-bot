@@ -7,10 +7,12 @@ export function createClient(): BotClient {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMessageReactions,
       GatewayIntentBits.GuildModeration,
       GatewayIntentBits.MessageContent,
+      GatewayIntentBits.GuildVoiceStates,
     ],
-    partials: [Partials.GuildMember, Partials.Channel],
+    partials: [Partials.GuildMember, Partials.Channel, Partials.Message, Partials.Reaction],
   }) as BotClient;
 
   client.commands = new Collection<string, Command>();

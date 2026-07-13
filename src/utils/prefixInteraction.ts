@@ -343,9 +343,9 @@ export function isTextCommandChannel(channel: Message['channel']): boolean {
   );
 }
 
-export function buildMissingArgsMessage(command: string): string {
+export function buildMissingArgsMessage(command: string, prefix = '.'): string {
   const schema = prefixSchemas[command];
-  if (!schema?.length) return `Usage: \`.${command}\``;
+  if (!schema?.length) return `Usage: \`${prefix}${command}\``;
 
   const usage = schema
     .map((arg) => {
@@ -365,5 +365,5 @@ export function buildMissingArgsMessage(command: string): string {
     })
     .join(' ');
 
-  return `Usage: \`.${command} ${usage}\``;
+  return `Usage: \`${prefix}${command} ${usage}\``;
 }

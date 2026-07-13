@@ -1,5 +1,6 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
+import { sendInvoke } from '../../utils/moderation.js';
 import { successEmbed, errorEmbed } from '../../utils/embeds.js';
 
 const command: Command = {
@@ -24,7 +25,15 @@ const command: Command = {
     }
 
     await member.timeout(null);
-    await interaction.reply({ embeds: [successEmbed(`Unmuted **${user.tag}**`)] });
+    const used = await sendInvoke(
+      { guild: interaction.guild!, action: 'untimeout', user, moderator: interaction.user, reason: 'Unmuted' },
+      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+    );
+    if (!used) {
+      await interaction.reply({ embeds: [successEmbed(`Unmuted **${user.tag}**`)] });
+    } else if (!interaction.replied) {
+      await interaction.reply({ content: 'Done.', ephemeral: true });
+    }
   },
 };
 
