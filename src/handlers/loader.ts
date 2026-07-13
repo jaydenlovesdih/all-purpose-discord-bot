@@ -6,6 +6,15 @@ import { BotClient, Command } from '../types/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function getSourceExtension(): string {
+  return __dirname.includes(`${join('dist', 'handlers')}`) ? '.js' : '.ts';
+}
+
+function listModuleFiles(directory: string): string[] {
+  const extension = getSourceExtension();
+  return readdirSync(directory).filter((file) => file.endsWith(extension));
+}
+
 export async function loadCommands(): Promise<Collection<string, Command>> {
   const commands = new Collection<string, Command>();
   const commandsPath = join(__dirname, '../commands');
@@ -15,7 +24,7 @@ export async function loadCommands(): Promise<Collection<string, Command>> {
 
   for (const category of categories) {
     const categoryPath = join(commandsPath, category);
-    const files = readdirSync(categoryPath).filter((f) => f.endsWith('.ts'));
+    const files = listModuleFiles(categoryPath);
 
     for (const file of files) {
       const filePath = join(categoryPath, file);
@@ -32,7 +41,7 @@ export async function loadCommands(): Promise<Collection<string, Command>> {
 
 export async function loadEvents(client: BotClient): Promise<void> {
   const eventsPath = join(__dirname, '../events');
-  const files = readdirSync(eventsPath).filter((f) => f.endsWith('.ts'));
+  const files = listModuleFiles(eventsPath);
 
   for (const file of files) {
     const filePath = join(eventsPath, file);
