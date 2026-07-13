@@ -1,0 +1,44 @@
+import { SlashCommandBuilder } from 'discord.js';
+import { Command } from '../../types/index.js';
+import { Colors } from '../../utils/embeds.js';
+import { formatUptime } from '../../utils/permissions.js';
+
+const command: Command = {
+  data: new SlashCommandBuilder().setName('help').setDescription('List all available commands'),
+  async execute(interaction, client) {
+    const categories = new Map<string, string[]>();
+
+    for (const cmd of client.commands.values()) {
+      const category = cmd.data.name.includes('ban') || cmd.data.name.includes('kick') || cmd.data.name.includes('mute') || cmd.data.name.includes('purge') || cmd.data.name.includes('warn')
+        ? 'Moderation'
+        : cmd.data.name === 'eval' || cmd.data.name === 'say' || cmd.data.name === 'reload'
+          ? 'Admin'
+          : cmd.data.name === '8ball' || cmd.data.name === 'coinflip'
+            ? 'Fun'
+            : 'Utility';
+
+      if (!categories.has(category)) categories.set(category, []);
+      categories.get(category)!.push(`\`/${cmd.data.name}\` — ${cmd.data.description}`);
+    }
+
+    const fields = [...categories.entries()].map(([name, cmds]) => ({
+      name,
+      value: cmds.join('\n'),
+    }));
+
+    await interaction.reply({
+      embeds: [
+        {
+          color: Colors.primary,
+          title: 'Command Help',
+          description: `Use \`/help\` anytime. Owner bypass is enabled for ID \`${process.env.OWNER_ID}\`.`,
+          fields,
+          footer: { text: `${client.commands.size} commands | Uptime: ${formatUptime(client.uptime ?? 0)}` },
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
+  },
+};
+
+export default command;
