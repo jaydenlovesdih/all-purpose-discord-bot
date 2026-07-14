@@ -3,7 +3,7 @@ import { Command } from '../../types/index.js';
 import { canBypass } from '../../utils/permissions.js';
 import { fail } from '../../utils/embeds.js';
 import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
-
+import { sendModLog } from '../../utils/moderation.js';
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName('role')
@@ -46,6 +46,14 @@ const command: Command = {
     else await member.roles.add(role, reason);
 
     const action = removing ? 'roleremove' : 'roleadd';
+    await sendModLog({
+      guild: interaction.guild!,
+      action,
+      user,
+      moderator: interaction.user,
+      reason,
+      extra: { role: role.name },
+    });
     const embed = buildModEmbed({
       action,
       target: user,

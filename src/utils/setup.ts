@@ -5,19 +5,82 @@ import {
   PermissionFlagsBits,
   TextChannel,
 } from 'discord.js';
-import { getGuildConfig, updateGuildConfig } from './guildConfig.js';
+import { getGuildConfig, LogChannels, updateGuildConfig } from './guildConfig.js';
+
+const CATEGORY_NAME = 'blaze mod';
+const OLD_CATEGORY_NAMES = ['greed-mod', 'greed mod'];
+
+type LogChannelDef = { key: keyof LogChannels; name: string; topic: string };
+
+const LOG_CHANNELS: LogChannelDef[] = [
+  { key: 'bans', name: 'bans', topic: 'Ban · Unban · Kick' },
+  { key: 'mutes', name: 'mutes', topic: 'Mute · Unmute · Timeout' },
+  { key: 'jail', name: 'jail-logs', topic: 'Jail · Unjail' },
+  { key: 'purge', name: 'purge', topic: 'Message purges' },
+  { key: 'roles', name: 'roles', topic: 'Role changes' },
+  { key: 'messages', name: 'messages', topic: 'Message delete history' },
+];
+
+async function ensureTextChannel(
+  guild: Guild,
+  categoryId: string,
+  name: string,
+  topic: string,
+  botId: string,
+): Promise<TextChannel> {
+  const existing = guild.channels.cache.find(
+    (c) => c.type === ChannelType.GuildText && c.name === name && c.parentId === categoryId,
+  ) as TextChannel | undefined;
+
+  if (existing) {
+    if (existing.topic !== topic) {
+      await existing.setTopic(topic).catch(() => undefined);
+    }
+    return existing;
+  }
+
+  return (await guild.channels.create({
+    name,
+    type: ChannelType.GuildText,
+    parent: categoryId,
+    topic,
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+      {
+        id: botId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.EmbedLinks,
+          PermissionFlagsBits.ReadMessageHistory,
+        ],
+      },
+    ],
+  })) as TextChannel;
+}
 
 export async function runServerSetup(guild: Guild): Promise<string> {
   const me = guild.members.me;
   if (!me) throw new Error('Bot member missing');
 
   let category = guild.channels.cache.find(
-    (c) => c.type === ChannelType.GuildCategory && c.name === 'greed-mod',
+    (c) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === CATEGORY_NAME,
   );
 
   if (!category) {
+    const legacy = guild.channels.cache.find(
+      (c) =>
+        c.type === ChannelType.GuildCategory &&
+        OLD_CATEGORY_NAMES.includes(c.name.toLowerCase()),
+    );
+    if (legacy) {
+      category = await legacy.setName(CATEGORY_NAME);
+    }
+  }
+
+  if (!category) {
     category = await guild.channels.create({
-      name: 'greed-mod',
+      name: CATEGORY_NAME,
       type: ChannelType.GuildCategory,
       permissionOverwrites: [
         { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
@@ -28,27 +91,24 @@ export async function runServerSetup(guild: Guild): Promise<string> {
             PermissionFlagsBits.SendMessages,
             PermissionFlagsBits.ManageChannels,
             PermissionFlagsBits.ManageRoles,
+            PermissionFlagsBits.EmbedLinks,
           ],
         },
       ],
     });
   }
 
-  let logs = guild.channels.cache.find(
-    (c) => c.type === ChannelType.GuildText && c.name === 'logs' && c.parentId === category!.id,
-  ) as TextChannel | undefined;
+  const logChannels: LogChannels = { ...getGuildConfig(guild.id).logChannels };
+  const createdLines: string[] = [];
 
-  if (!logs) {
-    logs = (await guild.channels.create({
-      name: 'logs',
-      type: ChannelType.GuildText,
-      parent: category.id,
-      permissionOverwrites: [
-        { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-        { id: me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-      ],
-    })) as TextChannel;
+  for (const def of LOG_CHANNELS) {
+    const ch = await ensureTextChannel(guild, category.id, def.name, def.topic, me.id);
+    logChannels[def.key] = ch.id;
+    createdLines.push(`${def.topic}: ${ch}`);
   }
+
+  // Primary/general logs pointer (bans channel as default mod log)
+  const primaryLogsId = logChannels.bans!;
 
   let jail = guild.channels.cache.find(
     (c) => c.type === ChannelType.GuildText && c.name === 'jail' && c.parentId === category!.id,
@@ -59,7 +119,7 @@ export async function runServerSetup(guild: Guild): Promise<string> {
     jailRole = await guild.roles.create({
       name: 'jailed',
       color: 0x2b2d31,
-      reason: 'Greed-style jail role',
+      reason: 'Blaze jail role',
     });
   }
 
@@ -72,9 +132,20 @@ export async function runServerSetup(guild: Guild): Promise<string> {
         { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
         {
           id: jailRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+          ],
         },
-        { id: me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] },
+        {
+          id: me.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ManageChannels,
+          ],
+        },
       ],
     })) as TextChannel;
   }
@@ -83,12 +154,16 @@ export async function runServerSetup(guild: Guild): Promise<string> {
     if (channel.id === jail.id || channel.id === category.id) continue;
     if (!('permissionOverwrites' in channel)) continue;
     await channel.permissionOverwrites
-      .edit(jailRole.id, {
-        ViewChannel: false,
-        SendMessages: false,
-        Connect: false,
-        Speak: false,
-      }, { type: OverwriteType.Role, reason: 'Jail role lockdown' })
+      .edit(
+        jailRole.id,
+        {
+          ViewChannel: false,
+          SendMessages: false,
+          Connect: false,
+          Speak: false,
+        },
+        { type: OverwriteType.Role, reason: 'Jail role lockdown' },
+      )
       .catch(() => undefined);
   }
 
@@ -97,7 +172,7 @@ export async function runServerSetup(guild: Guild): Promise<string> {
     muteRole = await guild.roles.create({
       name: 'Muted',
       color: 0x818386,
-      reason: 'Mute role',
+      reason: 'Blaze mute role',
     });
   }
 
@@ -112,16 +187,33 @@ export async function runServerSetup(guild: Guild): Promise<string> {
       .catch(() => undefined);
   }
 
+  const prev = getGuildConfig(guild.id);
   updateGuildConfig(guild.id, {
     jailRoleId: jailRole.id,
     jailChannelId: jail.id,
     muteRoleId: muteRole.id,
-    modLogChannelId: logs.id,
+    modLogChannelId: primaryLogsId,
+    logChannels,
+    logging: {
+      ...prev.logging,
+      enabled: true,
+      channelId: primaryLogsId,
+      events: {
+        ...prev.logging.events,
+        messageDelete: true,
+        memberBan: true,
+        memberUnban: true,
+        memberRole: true,
+      },
+    },
   });
 
   return [
     `Category: **${category.name}**`,
-    `Logs: ${logs}`,
+    '',
+    '**Log channels**',
+    ...createdLines,
+    '',
     `Jail: ${jail}`,
     `Jail role: **${jailRole.name}**`,
     `Mute role: **${muteRole.name}**`,

@@ -59,14 +59,22 @@ const command: Command = {
       return;
     }
 
-    const l = getGuildConfig(guildId).logging;
+    const cfg = getGuildConfig(guildId);
+    const l = cfg.logging;
+    const ch = cfg.logChannels ?? {};
     await interaction.reply({
       embeds: [
         infoEmbed(
           [
             `Enabled: **${l.enabled}**`,
-            `Channel: ${l.channelId ? `<#${l.channelId}>` : 'None'}`,
-            `Events: deletes=${l.events.messageDelete}, edits=${l.events.messageEdit}, joins=${l.events.memberJoin}, leaves=${l.events.memberLeave}, bans=${l.events.memberBan}`,
+            `Fallback: ${l.channelId ? `<#${l.channelId}>` : 'None'}`,
+            '',
+            `Bans: ${ch.bans ? `<#${ch.bans}>` : '—'}`,
+            `Mutes: ${ch.mutes ? `<#${ch.mutes}>` : '—'}`,
+            `Jail: ${ch.jail ? `<#${ch.jail}>` : '—'}`,
+            `Purge: ${ch.purge ? `<#${ch.purge}>` : '—'}`,
+            `Roles: ${ch.roles ? `<#${ch.roles}>` : '—'}`,
+            `Messages: ${ch.messages ? `<#${ch.messages}>` : '—'}`,
           ].join('\n'),
           'Logging',
         ),
@@ -74,5 +82,4 @@ const command: Command = {
     });
   },
 };
-
 export default command;

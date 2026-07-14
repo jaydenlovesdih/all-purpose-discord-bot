@@ -6,7 +6,7 @@ import {
 import { Command } from '../../types/index.js';
 import { fail } from '../../utils/embeds.js';
 import { buildPurgeEmbed } from '../../utils/modResponse.js';
-const MAX_AMOUNT = 1000;
+import { sendModLog } from '../../utils/moderation.js';const MAX_AMOUNT = 1000;
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 
 async function purgeMessages(
@@ -104,6 +104,14 @@ const command: Command = {
 
     try {
       const deleted = await purgeMessages(channel as TextChannel, amount, target?.id);
+      await sendModLog({
+        guild: interaction.guild!,
+        action: 'purge',
+        user: target ?? interaction.user,
+        moderator: interaction.user,
+        reason: target ? `User purge (${target.tag})` : 'Bulk delete',
+        extra: { amount: deleted },
+      });
       await interaction.editReply({
         embeds: [
           buildPurgeEmbed({

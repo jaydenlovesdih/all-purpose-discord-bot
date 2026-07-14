@@ -93,6 +93,21 @@ export interface StarboardConfig {
   threshold: number;
 }
 
+export interface LogChannels {
+  /** Ban, unban, kick */
+  bans?: string;
+  /** Mute, unmute, timeout */
+  mutes?: string;
+  /** Jail, unjail */
+  jail?: string;
+  /** Purge */
+  purge?: string;
+  /** Role add/remove / member role updates */
+  roles?: string;
+  /** Message delete history */
+  messages?: string;
+}
+
 export interface LoggingConfig {
   enabled: boolean;
   channelId?: string;
@@ -123,6 +138,8 @@ export interface GuildConfig {
   imageMuteRoleId?: string;
   reactionMuteRoleId?: string;
   modLogChannelId?: string;
+  /** Dedicated log channels created by setup */
+  logChannels: LogChannels;
   staffRoleIds: string[];
   hardbans: string[];
   jailedRoles: Record<string, string[]>;
@@ -256,7 +273,7 @@ const DEFAULT_LOGGING: LoggingConfig = {
     memberLeave: true,
     memberBan: true,
     memberUnban: true,
-    memberRole: false,
+    memberRole: true,
     channel: true,
     role: true,
   },
@@ -275,6 +292,7 @@ function defaults(): GuildConfig {
     welcome: { ...DEFAULT_WELCOME, autoRoleIds: [] },
     starboard: { ...DEFAULT_STARBOARD },
     logging: { ...DEFAULT_LOGGING, events: { ...DEFAULT_LOGGING.events } },
+    logChannels: {},
     aliases: {},
     autoresponders: [],
     fakePermissions: {},
@@ -319,6 +337,7 @@ export function getGuildConfig(guildId: string): GuildConfig {
       ...raw.logging,
       events: { ...DEFAULT_LOGGING.events, ...raw.logging?.events },
     },
+    logChannels: { ...(raw.logChannels ?? {}) },
     aliases: raw.aliases ?? {},
     autoresponders: raw.autoresponders ?? [],
     fakePermissions: raw.fakePermissions ?? {},
