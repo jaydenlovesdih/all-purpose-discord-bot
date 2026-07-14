@@ -21,6 +21,7 @@ export const BUILTIN_ALIASES: Record<string, string> = {
   lvl: 'levels',
   level: 'levels',
   // info
+  h: 'help',
   i: 'userinfo',
   ui: 'userinfo',
   si: 'serverinfo',

@@ -25,6 +25,11 @@ import {
   HelpCategoryId,
   HELP_CATEGORIES,
 } from '../utils/helpMenu.js';
+import {
+  buildCommandHelpEmbed,
+  buildCommandHelpSelect,
+  extractSubcommands,
+} from '../utils/commandHelp.js';
 import { buildRolesButtons, buildRolesEmbed } from '../utils/rolesList.js';
 
 const pendingSuggestArgs = new Map<
@@ -129,6 +134,40 @@ export async function handleComponent(
     await interaction.update({
       embeds: [embed],
       components: buildHelpButtons(category, safePage, totalPages, interaction.user.id),
+    });
+    return true;
+  }
+
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help:sub:')) {
+    const parts = interaction.customId.split(':');
+    // help:sub:<command>:<ownerId>
+    const commandName = parts[2];
+    const ownerId = parts[3];
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran help can use this menu')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const command = client.commands.get(commandName);
+    if (!command) {
+      await interaction.reply({ embeds: [fail(interaction.user, 'Command not found')], ephemeral: true });
+      return true;
+    }
+
+    const prefix = getPrefix(interaction.guildId, config.prefix);
+    const sub = interaction.values[0];
+    const embed = buildCommandHelpEmbed(command, prefix, {
+      sub,
+      botName: interaction.client.user?.username,
+    });
+    const select = buildCommandHelpSelect(command.data.name, extractSubcommands(command), interaction.user.id);
+
+    await interaction.update({
+      embeds: [embed],
+      components: select ? [select] : [],
     });
     return true;
   }

@@ -10,7 +10,7 @@ export interface PrefixArgDef {
 
 export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   ping: [],
-  help: [],
+  help: [{ name: 'command', type: 'string' }],
   botinfo: [],
   serverinfo: [],
   coinflip: [],
