@@ -1,31 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { GuildWarnings, WarningRecord } from '../types/index.js';
+import { readJson, writeJson } from './store.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '../../data');
-const WARNINGS_FILE = join(DATA_DIR, 'warnings.json');
-
-function ensureDataDir(): void {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
+const WARNINGS_KEY = 'warnings.json';
 
 function loadAll(): Record<string, GuildWarnings> {
-  ensureDataDir();
-  if (!existsSync(WARNINGS_FILE)) return {};
-  try {
-    return JSON.parse(readFileSync(WARNINGS_FILE, 'utf-8')) as Record<string, GuildWarnings>;
-  } catch {
-    return {};
-  }
+  return readJson<Record<string, GuildWarnings>>(WARNINGS_KEY, {});
 }
 
 function saveAll(data: Record<string, GuildWarnings>): void {
-  ensureDataDir();
-  writeFileSync(WARNINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  writeJson(WARNINGS_KEY, data);
 }
 
 export function addWarning(
