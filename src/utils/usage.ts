@@ -16,6 +16,7 @@ const EXAMPLES: Record<string, string> = {
   warn: '@user language',
   warnings: '@user',
   clearwarnings: '@user appealed',
+  ticket: 'setup',
   dnr: '@user stop replying to me',
   undnr: '@user',
   role: '@user @Member',

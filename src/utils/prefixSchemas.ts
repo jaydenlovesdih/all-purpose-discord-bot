@@ -84,6 +84,12 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'user', type: 'user', required: true },
     { name: 'reason', type: 'rest' },
   ],
+  ticket: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'role', type: 'role' },
+    { name: 'user', type: 'user' },
+    { name: 'text', type: 'rest' },
+  ],
   dnr: [
     { name: 'user', type: 'user', required: true },
     { name: 'reason', type: 'rest' },

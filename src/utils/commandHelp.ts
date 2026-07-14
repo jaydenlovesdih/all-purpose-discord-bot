@@ -88,6 +88,17 @@ const SUB_DETAILS: Record<string, Record<string, string>> = {
     channel: 'Set a fallback logging channel.',
     view: 'View logging status and dedicated log channels.',
   },
+  ticket: {
+    setup: 'Create the ticket category and post the open-ticket panel here.',
+    panel: 'Post the open-ticket panel in this channel.',
+    category: 'Create/set the ticket category.',
+    support: 'Toggle a support role that can see tickets. Usage: `support @role`',
+    message: 'Set the panel description text.',
+    close: 'Close the current ticket channel.',
+    add: 'Add a member to the current ticket. Usage: `add @user`',
+    remove: 'Remove a member from the current ticket. Usage: `remove @user`',
+    view: 'View ticket system settings.',
+  },
   alias: {
     add: 'Create an alias. Usage: `add <alias> <command>`',
     remove: 'Remove an alias. Usage: `remove <alias>`',

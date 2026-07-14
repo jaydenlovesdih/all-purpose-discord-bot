@@ -31,6 +31,7 @@ import {
   extractSubcommands,
 } from '../utils/commandHelp.js';
 import { buildRolesButtons, buildRolesEmbed } from '../utils/rolesList.js';
+import { closeTicket, openTicket } from '../utils/tickets.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -266,6 +267,44 @@ export async function handleComponent(
       ],
     });
     return true;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('ticket:')) {
+    if (!interaction.inGuild()) return true;
+    const parts = interaction.customId.split(':');
+    const action = parts[1];
+    const guild = interaction.guild!;
+
+    if (action === 'open') {
+      await interaction.deferReply({ ephemeral: true });
+      const result = await openTicket(guild, interaction.user);
+      if ('error' in result) {
+        await interaction.editReply({ embeds: [fail(interaction.user, result.error)] });
+        return true;
+      }
+      await interaction.editReply({
+        embeds: [ok(interaction.user, `your ticket was created: ${result.channel}`)],
+      });
+      return true;
+    }
+
+    if (action === 'close') {
+      const channelId = parts[2];
+      const channel = guild.channels.cache.get(channelId);
+      if (!channel?.isTextBased() || channel.isDMBased()) {
+        await interaction.reply({ embeds: [fail(interaction.user, 'Ticket channel not found')], ephemeral: true });
+        return true;
+      }
+
+      const result = await closeTicket(channel as import('discord.js').TextChannel, interaction.user);
+      if ('error' in result) {
+        await interaction.reply({ embeds: [fail(interaction.user, result.error)], ephemeral: true });
+        return true;
+      }
+
+      await interaction.reply({ embeds: [ok(interaction.user, 'closing ticket…')], ephemeral: true });
+      return true;
+    }
   }
 
   if (interaction.isButton() && interaction.customId.startsWith('mod:')) {

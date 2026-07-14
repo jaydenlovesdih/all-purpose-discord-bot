@@ -66,6 +66,7 @@ const SYSTEMS_CMDS = new Set([
   'levels',
   'starboard',
   'giveaway',
+  'ticket',
   'afk',
   'snipe',
   'editsnipe',

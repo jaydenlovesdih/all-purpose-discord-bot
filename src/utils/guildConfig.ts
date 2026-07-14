@@ -93,6 +93,24 @@ export interface StarboardConfig {
   threshold: number;
 }
 
+export interface TicketChannelRecord {
+  ownerId: string;
+  number: number;
+  createdAt: number;
+}
+
+export interface TicketsConfig {
+  categoryId?: string;
+  supportRoleIds: string[];
+  panelChannelId?: string;
+  panelMessageId?: string;
+  title: string;
+  description: string;
+  /** Active ticket channels keyed by channel id */
+  open: Record<string, TicketChannelRecord>;
+  nextNumber: number;
+}
+
 export interface LogChannels {
   /** Ban, unban, kick */
   bans?: string;
@@ -165,6 +183,7 @@ export interface GuildConfig {
   levels: LevelsConfig;
   welcome: WelcomeConfig;
   starboard: StarboardConfig;
+  tickets: TicketsConfig;
   logging: LoggingConfig;
   aliases: Record<string, string>;
   autoresponders: AutoresponderEntry[];
@@ -279,6 +298,15 @@ const DEFAULT_STARBOARD: StarboardConfig = {
   threshold: 3,
 };
 
+const DEFAULT_TICKETS: TicketsConfig = {
+  supportRoleIds: [],
+  title: '🎫 Support Tickets',
+  description:
+    'Need help from staff? Click **Open Ticket** below and describe your issue.\n\nOnly open one ticket at a time.',
+  open: {},
+  nextNumber: 1,
+};
+
 const DEFAULT_LOGGING: LoggingConfig = {
   enabled: false,
   events: {
@@ -307,6 +335,7 @@ function defaults(): GuildConfig {
     levels: { ...DEFAULT_LEVELS, rewards: [] },
     welcome: { ...DEFAULT_WELCOME, autoRoleIds: [] },
     starboard: { ...DEFAULT_STARBOARD },
+    tickets: { ...DEFAULT_TICKETS, open: {}, supportRoleIds: [] },
     logging: { ...DEFAULT_LOGGING, events: { ...DEFAULT_LOGGING.events } },
     logChannels: {},
     aliases: {},
@@ -348,6 +377,12 @@ export function getGuildConfig(guildId: string): GuildConfig {
     levels: { ...DEFAULT_LEVELS, ...raw.levels },
     welcome: { ...DEFAULT_WELCOME, ...raw.welcome },
     starboard: { ...DEFAULT_STARBOARD, ...raw.starboard },
+    tickets: {
+      ...DEFAULT_TICKETS,
+      ...raw.tickets,
+      open: { ...(raw.tickets?.open ?? {}) },
+      supportRoleIds: raw.tickets?.supportRoleIds ?? [],
+    },
     logging: {
       ...DEFAULT_LOGGING,
       ...raw.logging,
