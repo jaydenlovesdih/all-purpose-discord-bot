@@ -25,6 +25,7 @@ import {
   HelpCategoryId,
   HELP_CATEGORIES,
 } from '../utils/helpMenu.js';
+import { buildRolesButtons, buildRolesEmbed } from '../utils/rolesList.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -128,6 +129,31 @@ export async function handleComponent(
     await interaction.update({
       embeds: [embed],
       components: buildHelpButtons(category, safePage, totalPages, interaction.user.id),
+    });
+    return true;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('roles:')) {
+    const parts = interaction.customId.split(':');
+    const ownerId = parts.at(-1);
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran roles can use these buttons')],
+        ephemeral: true,
+      });
+      return true;
+    }
+    if (!interaction.guild) return true;
+
+    let page = Number(parts[3]) || 0;
+    const dir = parts[2];
+    if (dir === 'prev') page -= 1;
+    if (dir === 'next') page += 1;
+
+    const { embed, page: safePage, totalPages } = buildRolesEmbed(interaction.guild, page);
+    await interaction.update({
+      embeds: [embed],
+      components: buildRolesButtons(safePage, totalPages, interaction.user.id),
     });
     return true;
   }

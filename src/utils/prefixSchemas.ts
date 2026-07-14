@@ -16,6 +16,7 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   coinflip: [],
   setup: [],
   clearsnipe: [],
+  roles: [],
   userinfo: [{ name: 'user', type: 'user' }],
   avatar: [{ name: 'user', type: 'user' }],
   ban: [

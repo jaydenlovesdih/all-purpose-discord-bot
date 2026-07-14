@@ -41,6 +41,7 @@ const EXAMPLES: Record<string, string> = {
   eval: '1 + 1',
   avatar: '@user',
   userinfo: '@user',
+  roles: '',
 };
 
 function schemaUsage(schema: PrefixArgDef[], prefix: string, command: string): string {

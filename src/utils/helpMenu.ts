@@ -57,7 +57,7 @@ const ADMIN_CMDS = new Set([
   'logging',
 ]);
 
-const INFO_CMDS = new Set(['help', 'ping', 'botinfo', 'avatar', 'userinfo', 'serverinfo']);
+const INFO_CMDS = new Set(['help', 'ping', 'botinfo', 'avatar', 'userinfo', 'serverinfo', 'roles']);
 
 const SYSTEMS_CMDS = new Set([
   'welcome',
