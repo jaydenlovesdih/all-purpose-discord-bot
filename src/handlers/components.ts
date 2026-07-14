@@ -21,6 +21,12 @@ import {
 } from '../utils/prefixInteraction.js';
 import { getPrefix } from '../utils/setup.js';
 import { config } from '../config.js';
+import {
+  buildHelpButtons,
+  buildHelpEmbed,
+  HelpCategoryId,
+  HELP_CATEGORIES,
+} from '../utils/helpMenu.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -92,6 +98,42 @@ export async function handleComponent(
   interaction: import('discord.js').Interaction,
   client: BotClient,
 ): Promise<boolean> {
+  if (interaction.isButton() && interaction.customId.startsWith('help:')) {
+    const parts = interaction.customId.split(':');
+    const kind = parts[1];
+    const ownerId = parts.at(-1);
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran help can use these buttons')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const prefix = getPrefix(interaction.guildId, config.prefix);
+    let category: HelpCategoryId = 'info';
+    let page = 0;
+
+    if (kind === 'cat') {
+      category = parts[2] as HelpCategoryId;
+      if (!HELP_CATEGORIES.some((c) => c.id === category)) category = 'info';
+      page = 0;
+    } else if (kind === 'page') {
+      const dir = parts[2];
+      category = parts[3] as HelpCategoryId;
+      page = Number(parts[4]) || 0;
+      if (dir === 'prev') page -= 1;
+      if (dir === 'next') page += 1;
+    }
+
+    const { embed, page: safePage, totalPages } = buildHelpEmbed(client, prefix, category, page);
+    await interaction.update({
+      embeds: [embed],
+      components: buildHelpButtons(category, safePage, totalPages, interaction.user.id),
+    });
+    return true;
+  }
+
   if (interaction.isButton() && interaction.customId === 'suggest:no') {
     await interaction.update({ content: 'Cancelled.', embeds: [], components: [] });
     return true;
