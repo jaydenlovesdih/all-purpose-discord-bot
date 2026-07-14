@@ -1,15 +1,15 @@
 import { EmbedBuilder, User } from 'discord.js';
 
-/** Bleed/Greed visual system */
+/** Embed sidebar colors */
 export const Colors = {
-  /** Soft success green used by Bleed embeds */
-  success: 0xa3d977,
-  error: 0xed4245,
+  /** Successful command replies */
+  success: 0xffffff,
+  /** Failed / invalid command replies */
+  error: 0x000000,
   warning: 0xfaa81a,
-  /** Neutral dark for case/event logs */
   log: 0x2b2d31,
-  primary: 0x2b2d31,
-  info: 0x2b2d31,
+  primary: 0xffffff,
+  info: 0xffffff,
 } as const;
 
 function mentionOf(user: User | string): string {

@@ -1,6 +1,6 @@
 import { GuildMember, Message, MessagePayload, User } from 'discord.js';
 import { PrefixArgDef, prefixSchemas } from './prefixSchemas.js';
-
+import { buildUsageLine } from './usage.js';
 type ReplyPayload = string | MessagePayload | import('discord.js').InteractionReplyOptions;
 
 export class PrefixOptions {
@@ -340,26 +340,5 @@ export function isTextCommandChannel(channel: Message['channel']): boolean {
 }
 
 export function buildMissingArgsMessage(command: string, prefix = '.'): string {
-  const schema = prefixSchemas[command];
-  if (!schema?.length) return `Usage: \`${prefix}${command}\``;
-
-  const usage = schema
-    .map((arg) => {
-      const label =
-        arg.type === 'user'
-          ? '@user'
-          : arg.type === 'role'
-            ? '@role'
-            : arg.type === 'channel'
-              ? '#channel'
-              : arg.type === 'integer'
-                ? 'number'
-                : arg.type === 'rest'
-                  ? '...'
-                  : 'text';
-      return arg.required ? `<${label}>` : `[${label}]`;
-    })
-    .join(' ');
-
-  return `Usage: \`${prefix}${command} ${usage}\``;
+  return `Usage: \`${buildUsageLine(command, prefix)}\``;
 }

@@ -8,7 +8,7 @@ import {
 } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { getWarnings } from '../../utils/warnings.js';
-import { MOD_ACCENT } from '../../utils/modResponse.js';
+import { Colors } from '../../utils/embeds.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -27,7 +27,7 @@ const command: Command = {
     }
 
     const embed = new EmbedBuilder()
-      .setColor(MOD_ACCENT)
+      .setColor(Colors.success)
       .setTitle(`⚠️ Warnings for ${user.username}`)
       .setThumbnail(user.displayAvatarURL({ size: 256 }))
       .setDescription(

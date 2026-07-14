@@ -7,8 +7,8 @@ import {
 import { config } from '../config.js';
 import { getGuildConfig, memberHasFakePermission } from './guildConfig.js';
 import { PrefixCommandInteraction } from './prefixInteraction.js';
+import { fail } from './embeds.js';
 import type { ChatInputCommandInteraction } from 'discord.js';
-
 type CommandInteractionLike = ChatInputCommandInteraction | PrefixCommandInteraction;
 
 export function isOwner(userId: string): boolean {
@@ -55,7 +55,7 @@ export async function ensurePermissions(
   const member = await resolveMember(interaction);
   if (!hasPermissions(member, permissions, interaction.user.id)) {
     await interaction.reply({
-      content: 'You do not have permission to use this command.',
+      embeds: [fail(interaction.user, 'You do not have permission to use this command')],
       ephemeral: !(interaction instanceof PrefixCommandInteraction),
     });
     return false;
@@ -68,7 +68,7 @@ export async function ensureOwner(interaction: CommandInteractionLike): Promise<
   if (isOwner(interaction.user.id)) return true;
 
   await interaction.reply({
-    content: 'This command is restricted to the bot owner.',
+    embeds: [fail(interaction.user, 'This command is restricted to the bot owner')],
     ephemeral: !(interaction instanceof PrefixCommandInteraction),
   });
   return false;

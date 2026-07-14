@@ -7,17 +7,17 @@ import { runAutoMod } from '../utils/automod.js';
 import { getGuildConfig, mutateGuildConfig } from '../utils/guildConfig.js';
 import { addMessageXp, canGainXp } from '../utils/levelsStore.js';
 import { suggestCommands } from '../utils/fuzzy.js';
-import { didYouMeanEmbed, usageEmbed, MOD_ACCENT } from '../utils/modResponse.js';
+import { didYouMeanEmbed, usageEmbed } from '../utils/modResponse.js';
+import { Colors } from '../utils/embeds.js';
+import { buildUsageLine } from '../utils/usage.js';
 import {
-  buildMissingArgsMessage,
   isTextCommandChannel,
   parsePrefixMessage,
   PrefixCommandInteraction,
 } from '../utils/prefixInteraction.js';
 import { prefixSchemas } from '../utils/prefixSchemas.js';
 import { getPrefix } from '../utils/setup.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-const BUILTIN_ALIASES: Record<string, string> = {
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';const BUILTIN_ALIASES: Record<string, string> = {
   timeout: 'timeout',
   to: 'timeout',
   mute: 'mute',
@@ -134,7 +134,7 @@ export default {
         await message.reply({
           embeds: [
             new EmbedBuilder()
-              .setColor(MOD_ACCENT)
+              .setColor(Colors.error)
               .setDescription(`Unknown command \`${prefix}${parsed.command}\`\nTry \`${prefix}help\``),
           ],
         });
@@ -157,7 +157,7 @@ export default {
       await runCommand(interaction, client);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('Missing required')) {
-        const usage = buildMissingArgsMessage(resolved, prefix).replace(/^Usage:\s*/, '');
+        const usage = buildUsageLine(resolved, prefix);
         await message.reply({
           embeds: [usageEmbed(resolved, usage, prefix)],
           components: [
@@ -173,13 +173,9 @@ export default {
       }
 
       console.error(`Prefix command error ${prefix}${resolved}:`, error);
-      const usage = buildMissingArgsMessage(resolved, prefix).replace(/^Usage:\s*/, '');
+      const usage = buildUsageLine(resolved, prefix);
       await message.reply({
-        embeds: [
-          usageEmbed(resolved, usage, prefix).setDescription(
-            `Something went wrong running this command.\n\n**Usage**\n\`${usage}\`\n\n\`${error instanceof Error ? error.message : 'unknown error'}\``,
-          ),
-        ],
+        embeds: [usageEmbed(resolved, usage, prefix)],
       });
     }
   },

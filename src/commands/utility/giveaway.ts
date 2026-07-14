@@ -8,8 +8,7 @@ import {
 } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { mutateGuildConfig, getGuildConfig } from '../../utils/guildConfig.js';
-import { fail } from '../../utils/embeds.js';
-import { MOD_ACCENT } from '../../utils/modResponse.js';
+import { fail, Colors } from '../../utils/embeds.js';
 
 function parseDuration(input: string): number | null {
   const match = input.match(/^(\d+)(s|m|h|d)$/i);
@@ -53,7 +52,7 @@ export async function endGiveaway(
   await message.edit({
     embeds: [
       new EmbedBuilder()
-        .setColor(MOD_ACCENT)
+        .setColor(Colors.success)
         .setTitle('🎉 Giveaway Ended')
         .setDescription(
           `**Prize:** ${g.prize}\n**Winner(s):** ${picked.map((id) => `<@${id}>`).join(', ')}`,
@@ -90,7 +89,7 @@ const command: Command = {
 
     const endsAt = Date.now() + duration;
     const embed = new EmbedBuilder()
-      .setColor(MOD_ACCENT)
+      .setColor(Colors.success)
       .setTitle('🎉 Giveaway')
       .setDescription(
         `**Prize:** ${prize}\n**Winners:** ${winners}\n**Ends:** <t:${Math.floor(endsAt / 1000)}:R>\n**Entries:** 0\n\nClick **Enter** to join!`,

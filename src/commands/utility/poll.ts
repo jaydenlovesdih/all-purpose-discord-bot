@@ -7,7 +7,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { Command } from '../../types/index.js';
-import { MOD_ACCENT } from '../../utils/modResponse.js';
+import { Colors } from '../../utils/embeds.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -20,7 +20,7 @@ const command: Command = {
     const question = interaction.options.getString('question', true);
 
     const embed = new EmbedBuilder()
-      .setColor(MOD_ACCENT)
+      .setColor(Colors.success)
       .setTitle('📊 Poll')
       .setDescription(`**${question}**\n\n✅ Yes: **0**\n❌ No: **0**`)
       .setFooter({ text: `Poll by ${interaction.user.tag}` })

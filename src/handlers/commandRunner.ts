@@ -1,8 +1,12 @@
 import { ChatInputCommandInteraction } from 'discord.js';
+import { config } from '../config.js';
 import { BotClient } from '../types/index.js';
 import { ensureOwner, ensurePermissions } from '../utils/permissions.js';
 import { errorEmbed } from '../utils/embeds.js';
+import { usageEmbed } from '../utils/modResponse.js';
+import { buildUsageLine } from '../utils/usage.js';
 import { asSlashInteraction, PrefixCommandInteraction } from '../utils/prefixInteraction.js';
+import { getPrefix } from '../utils/setup.js';
 
 type CommandInteractionLike = ChatInputCommandInteraction | PrefixCommandInteraction;
 
@@ -25,6 +29,8 @@ export async function runCommand(
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
 
+  const prefix = getPrefix(interaction.guildId, config.prefix);
+
   try {
     if (command.ownerOnly && !(await ensureOwner(interaction))) return;
 
@@ -40,6 +46,17 @@ export async function runCommand(
 
     await command.execute(asSlashInteraction(interaction), client);
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Missing required')) {
+      const usage = buildUsageLine(interaction.commandName, prefix);
+      const embed = usageEmbed(interaction.commandName, usage, prefix);
+      if (interaction.replied) {
+        await interaction.followUp({ embeds: [embed] });
+      } else {
+        await interaction.reply({ embeds: [embed] });
+      }
+      return;
+    }
+
     console.error(`Error executing ${interaction.commandName}:`, error);
 
     const embed = errorEmbed('An unexpected error occurred while running this command.');

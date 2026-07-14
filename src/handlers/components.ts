@@ -13,14 +13,12 @@ import { BotClient } from '../types/index.js';
 import { runCommand } from './commandRunner.js';
 import { getGuildConfig, mutateGuildConfig } from '../utils/guildConfig.js';
 import { canBypass } from '../utils/permissions.js';
-import { MOD_ACCENT, ModActionType } from '../utils/modResponse.js';
-import { ok, fail } from '../utils/embeds.js';
-import {
-  buildMissingArgsMessage,
-  PrefixCommandInteraction,
-} from '../utils/prefixInteraction.js';
+import { usageEmbed, ModActionType } from '../utils/modResponse.js';
+import { ok, fail, Colors } from '../utils/embeds.js';
+import { PrefixCommandInteraction } from '../utils/prefixInteraction.js';
 import { getPrefix } from '../utils/setup.js';
 import { config } from '../config.js';
+import { buildUsageExample, buildUsageLine } from '../utils/usage.js';
 import {
   buildHelpButtons,
   buildHelpEmbed,
@@ -149,14 +147,13 @@ export async function handleComponent(
 
     const prefix =
       pending?.prefix ?? getPrefix(interaction.guildId ?? undefined, config.prefix);
-    const usage = buildMissingArgsMessage(chosen, prefix).replace(/^Usage:\s*/, '');
     const command = client.commands.get(chosen);
     pendingSuggestArgs.delete(interaction.message.id);
 
     await interaction.update({
       embeds: [
         new EmbedBuilder()
-          .setColor(MOD_ACCENT)
+          .setColor(Colors.success)
           .setDescription(`Running **${prefix}${chosen}**…`),
       ],
       components: [],
@@ -172,13 +169,7 @@ export async function handleComponent(
         if (error instanceof Error && error.message.startsWith('Missing required')) {
           await interaction.editReply({
             embeds: [
-              new EmbedBuilder()
-                .setColor(MOD_ACCENT)
-                .setTitle(`❓ How to use \`${prefix}${chosen}\``)
-                .setDescription(
-                  `${command.data.description}\n\n**Usage**\n\`${usage}\`\n\n` +
-                    `Try:\n\`${prefix}${chosen}${pending.args ? ` ${pending.args}` : ''}\``,
-                ),
+              usageEmbed(chosen, buildUsageLine(chosen, prefix), prefix),
             ],
             components: [
               new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -197,10 +188,10 @@ export async function handleComponent(
     await interaction.editReply({
       embeds: [
         new EmbedBuilder()
-          .setColor(MOD_ACCENT)
+          .setColor(Colors.error)
           .setTitle(`Selected \`${prefix}${chosen}\``)
           .setDescription(
-            `${command?.data.description ?? 'Command'}\n\n**Usage**\n\`${usage}\``,
+            `${command?.data.description ?? 'Command'}\n\n**Usage**\n\`${buildUsageLine(chosen, prefix)}\`\n\n**Example**\n\`${buildUsageExample(chosen, prefix)}\``,
           ),
       ],
       components: [

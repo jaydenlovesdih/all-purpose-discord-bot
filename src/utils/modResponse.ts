@@ -6,8 +6,11 @@ import {
   GuildMember,
   User,
 } from 'discord.js';
+import { Colors } from './embeds.js';
+import { buildUsageExample, buildUsageLine } from './usage.js';
 
-export const MOD_ACCENT = 0xf0b232;
+/** @deprecated prefer Colors.success / Colors.error */
+export const MOD_ACCENT = Colors.success;
 
 export type ModActionType =
   | 'ban'
@@ -60,7 +63,7 @@ export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
     : `**${display}** ${meta.verb}`;
 
   return new EmbedBuilder()
-    .setColor(MOD_ACCENT)
+    .setColor(Colors.success)
     .setTitle(`${meta.emoji} ${meta.title}`)
     .setDescription(description)
     .setThumbnail(opts.target.displayAvatarURL({ size: 256 }))
@@ -125,17 +128,20 @@ export function buildModButtons(action: ModActionType, userId: string): ActionRo
 }
 
 export function usageEmbed(command: string, usage: string, prefix: string): EmbedBuilder {
+  const syntax = usage || buildUsageLine(command, prefix);
+  const example = buildUsageExample(command, prefix);
+
   return new EmbedBuilder()
-    .setColor(MOD_ACCENT)
+    .setColor(Colors.error)
     .setTitle(`❓ How to use \`${prefix}${command}\``)
     .setDescription(
-      `That command was used incorrectly.\n\n**Usage**\n\`${usage}\`\n\n**Example**\n\`${prefix}${command}\` with the required arguments.`,
+      `That command was used incorrectly.\n\n**Usage**\n\`${syntax}\`\n\n**Example**\n\`${example}\``,
     );
 }
 
 export function didYouMeanEmbed(botName: string): EmbedBuilder {
   return new EmbedBuilder()
-    .setColor(MOD_ACCENT)
+    .setColor(Colors.error)
     .setDescription('**Did you mean one of these?**')
     .setFooter({ text: botName });
 }

@@ -5,7 +5,7 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import { BotClient } from '../types/index.js';
-import { MOD_ACCENT } from './modResponse.js';
+import { Colors } from './embeds.js';
 
 export const HELP_CATEGORIES = [
   { id: 'mod', label: 'Moderation' },
@@ -106,7 +106,7 @@ export function buildHelpEmbed(
     : '_No commands in this category._';
 
   const embed = new EmbedBuilder()
-    .setColor(MOD_ACCENT)
+    .setColor(Colors.success)
     .setTitle(`📚 Help: ${categoryLabel(category)}`)
     .setDescription(
       `Use \`${prefix}[command]\` to interact with the bot.\n\n**Commands:**\n${list}`,
