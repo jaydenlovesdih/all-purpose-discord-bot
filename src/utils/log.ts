@@ -1,8 +1,18 @@
-import { EmbedBuilder, Guild, TextChannel, User } from 'discord.js';
-import { getGuildConfig, LogChannels } from './guildConfig.js';
+import { ChannelType, EmbedBuilder, Guild, TextChannel, User } from 'discord.js';
+import { getGuildConfig, LogChannels, mutateGuildConfig } from './guildConfig.js';
 import { Colors } from './embeds.js';
 
 export type LogChannelKey = keyof LogChannels;
+
+/** Channel names created by `,setup` under the blaze mod category */
+export const LOG_CHANNEL_NAMES: Record<LogChannelKey, string> = {
+  bans: 'bans',
+  mutes: 'mutes',
+  jail: 'jail-logs',
+  purge: 'purge',
+  roles: 'roles',
+  messages: 'messages',
+};
 
 const ACTION_CHANNEL: Record<string, LogChannelKey> = {
   ban: 'bans',
@@ -27,9 +37,57 @@ export function logChannelForAction(action: string): LogChannelKey {
   return ACTION_CHANNEL[action] ?? 'bans';
 }
 
-export function resolveLogChannelId(guildId: string, key: LogChannelKey): string | undefined {
-  const cfg = getGuildConfig(guildId);
-  return cfg.logChannels?.[key] ?? cfg.logging.channelId ?? cfg.modLogChannelId;
+function findModCategory(guild: Guild) {
+  return guild.channels.cache.find(
+    (c) =>
+      c.type === ChannelType.GuildCategory &&
+      ['blaze mod', 'greed-mod', 'greed mod'].includes(c.name.toLowerCase()),
+  );
+}
+
+/** Re-find setup log channels by name (survives Railway wiping guilds.json) */
+export function discoverLogChannels(guild: Guild): LogChannels {
+  const category = findModCategory(guild);
+  if (!category) return {};
+
+  const found: LogChannels = {};
+  for (const [key, name] of Object.entries(LOG_CHANNEL_NAMES) as [LogChannelKey, string][]) {
+    const channel = guild.channels.cache.find(
+      (c) => c.type === ChannelType.GuildText && c.parentId === category.id && c.name === name,
+    );
+    if (channel) found[key] = channel.id;
+  }
+  return found;
+}
+
+/**
+ * Resolve a log channel ID. If config was wiped on redeploy, rediscover
+ * channels under "blaze mod" and persist them again.
+ */
+export function resolveLogChannelId(guild: Guild, key: LogChannelKey): string | undefined {
+  const cfg = getGuildConfig(guild.id);
+  let id = cfg.logChannels?.[key] ?? cfg.logging.channelId ?? cfg.modLogChannelId;
+
+  // Stale / missing — rediscover from Discord
+  if (!id || !guild.channels.cache.has(id)) {
+    const found = discoverLogChannels(guild);
+    if (Object.keys(found).length) {
+      mutateGuildConfig(guild.id, (c) => {
+        c.logChannels = { ...c.logChannels, ...found };
+        c.logging.enabled = true;
+        c.logging.channelId = c.logging.channelId ?? found.bans ?? Object.values(found)[0];
+        c.modLogChannelId = c.modLogChannelId ?? found.bans ?? Object.values(found)[0];
+      });
+      id = found[key] ?? found.bans ?? Object.values(found)[0];
+    }
+  } else if (!cfg.logging.enabled && Object.values(cfg.logChannels ?? {}).some(Boolean)) {
+    // Channels configured but flag was reset to default false after redeploy
+    mutateGuildConfig(guild.id, (c) => {
+      c.logging.enabled = true;
+    });
+  }
+
+  return id;
 }
 
 /** Clean Infinity-style log embed (matches mod command responses) */
@@ -95,19 +153,19 @@ export async function sendToLogChannel(
   key: LogChannelKey,
   embed: EmbedBuilder,
 ): Promise<void> {
-  const cfg = getGuildConfig(guild.id);
-  if (!cfg.logging.enabled) return;
-
-  const channelId = resolveLogChannelId(guild.id, key);
+  const channelId = resolveLogChannelId(guild, key);
   if (!channelId) return;
 
-  const channel = guild.channels.cache.get(channelId);
+  let channel = guild.channels.cache.get(channelId);
+  if (!channel) {
+    channel = (await guild.channels.fetch(channelId).catch(() => null)) ?? undefined;
+  }
   if (!channel?.isTextBased() || !channel.isSendable()) return;
 
   await (channel as TextChannel).send({ embeds: [embed] }).catch(() => undefined);
 }
 
-/** Event-based logging (joins, channel create, etc.) — falls back to messages/roles/bans mapping */
+/** Event-based logging (joins, channel create, etc.) */
 export async function sendLog(
   guild: Guild,
   event: keyof ReturnType<typeof getGuildConfig>['logging']['events'],
@@ -126,9 +184,6 @@ export async function sendLog(
     emoji?: string;
   },
 ): Promise<void> {
-  const cfg = getGuildConfig(guild.id);
-  if (!cfg.logging.enabled || !cfg.logging.events[event]) return;
-
   const key: LogChannelKey =
     event === 'messageDelete' || event === 'messageEdit'
       ? 'messages'
@@ -138,12 +193,20 @@ export async function sendLog(
           ? 'bans'
           : 'messages';
 
-  // Prefer dedicated channel; otherwise general logging channel
-  const channelId =
-    resolveLogChannelId(guild.id, key) ?? cfg.logging.channelId ?? cfg.modLogChannelId;
+  // Rediscover / enable happens inside resolveLogChannelId
+  const channelId = resolveLogChannelId(guild, key);
   if (!channelId) return;
 
-  const channel = guild.channels.cache.get(channelId);
+  const cfg = getGuildConfig(guild.id);
+  // After rediscovery, events are on by default; if config still says off for this event, skip
+  // unless we just re-enabled logging from discovery (logging.enabled true)
+  if (!cfg.logging.enabled) return;
+  if (!cfg.logging.events[event]) return;
+
+  let channel = guild.channels.cache.get(channelId);
+  if (!channel) {
+    channel = (await guild.channels.fetch(channelId).catch(() => null)) ?? undefined;
+  }
   if (!channel?.isTextBased() || !channel.isSendable()) return;
 
   const emoji =
@@ -193,13 +256,13 @@ export async function sendPurgeMessageHistory(
 ): Promise<void> {
   if (!snapshots.length) return;
 
-  const cfg = getGuildConfig(guild.id);
-  if (!cfg.logging.enabled) return;
-
-  const channelId = resolveLogChannelId(guild.id, 'purge');
+  const channelId = resolveLogChannelId(guild, 'purge');
   if (!channelId) return;
 
-  const logChannel = guild.channels.cache.get(channelId);
+  let logChannel = guild.channels.cache.get(channelId);
+  if (!logChannel) {
+    logChannel = (await guild.channels.fetch(channelId).catch(() => null)) ?? undefined;
+  }
   if (!logChannel?.isTextBased() || !logChannel.isSendable()) return;
 
   const lines = snapshots.map((s, i) => {

@@ -78,12 +78,6 @@ const ACTION_META: Record<string, { emoji: string; title: string; verb: string }
 
 export async function sendModLog(ctx: ModActionContext): Promise<number> {
   const caseId = nextCaseId(ctx.guild.id);
-  const cfg = getGuildConfig(ctx.guild.id);
-
-  const hasDedicated = Object.values(cfg.logChannels ?? {}).some(Boolean);
-  if (!cfg.logging.enabled && !cfg.modLogChannelId && !hasDedicated) {
-    return caseId;
-  }
 
   const meta = ACTION_META[ctx.action] ?? {
     emoji: '📋',
@@ -110,13 +104,7 @@ export async function sendModLog(ctx: ModActionContext): Promise<number> {
             : undefined,
   });
 
-  // Ensure logs send when setup channels exist
-  if (!cfg.logging.enabled && hasDedicated) {
-    mutateGuildConfig(ctx.guild.id, (c) => {
-      c.logging.enabled = true;
-    });
-  }
-
+  // resolveLogChannelId rediscovers blaze-mod channels after Railway wipe
   await sendToLogChannel(ctx.guild, logChannelForAction(ctx.action), embed);
   return caseId;
 }
