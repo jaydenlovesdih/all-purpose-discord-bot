@@ -1,21 +1,18 @@
 import { REST, Routes } from 'discord.js';
 import { config } from './config.js';
-import { loadCommands } from './handlers/loader.js';
 
+/** Slash commands are disabled — prefix-only bot. Clears any previously deployed commands. */
 async function deployCommands(): Promise<void> {
-  const commands = await loadCommands();
-  const body = commands.map((cmd) => cmd.data.toJSON());
-
   const rest = new REST({ version: '10' }).setToken(config.token);
 
-  console.log(`Deploying ${body.length} application commands...`);
+  console.log('Clearing application commands (prefix-only mode)...');
 
-  await rest.put(Routes.applicationCommands(config.clientId), { body });
+  await rest.put(Routes.applicationCommands(config.clientId), { body: [] });
 
-  console.log('Successfully deployed global application commands.');
+  console.log('Slash commands disabled.');
 }
 
 deployCommands().catch((error) => {
-  console.error('Failed to deploy commands:', error);
+  console.error('Failed to update application commands:', error);
   process.exit(1);
 });

@@ -57,6 +57,7 @@ const ADMIN_CMDS = new Set([
   'alias',
   'autoresponder',
   'logging',
+  'rolereaction',
 ]);
 
 const INFO_CMDS = new Set(['help', 'ping', 'botinfo', 'avatar', 'userinfo', 'serverinfo', 'roles']);

@@ -32,6 +32,10 @@ import {
 } from '../utils/commandHelp.js';
 import { buildRolesButtons, buildRolesEmbed } from '../utils/rolesList.js';
 import { closeTicket, openTicket } from '../utils/tickets.js';
+import {
+  applyRoleReaction,
+  pendingRoleReactions,
+} from '../utils/rolereaction.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -267,6 +271,80 @@ export async function handleComponent(
       ],
     });
     return true;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('rolereaction:')) {
+    if (!interaction.inGuild()) return true;
+
+    const pending = pendingRoleReactions.get(interaction.message.id);
+    if (!pending) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'This confirmation expired — run the command again')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (!canBypass(interaction.user.id) || interaction.user.id !== pending.ownerId) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the bot owner who ran this command can confirm it')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'rolereaction:cancel') {
+      pendingRoleReactions.delete(interaction.message.id);
+      await interaction.update({
+        embeds: [
+          EmbedBuilder.from(interaction.message.embeds[0] ?? {}).setDescription(
+            '❌ **Cancelled** — no roles were assigned.',
+          ),
+        ],
+        components: [],
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'rolereaction:confirm') {
+      await interaction.deferUpdate();
+      pendingRoleReactions.delete(interaction.message.id);
+
+      const guild = interaction.guild!;
+      const role = guild.roles.cache.get(pending.roleId);
+      if (!role) {
+        await interaction.editReply({
+          embeds: [fail(interaction.user, 'Role no longer exists')],
+          components: [],
+        });
+        return true;
+      }
+
+      const result = await applyRoleReaction(guild, pending.roleId, pending.userIds);
+
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.success)
+            .setTitle('🎭 Role Reaction Complete')
+            .setDescription(
+              [
+                `Assigned ${role} to reactors on image messages in <#${pending.channelId}>.`,
+                '',
+                `✅ **Added:** ${result.success}`,
+                `⏭️ **Already had / left:** ${result.skipped}`,
+                `❌ **Failed:** ${result.failed}`,
+                '',
+                `**Image messages scanned:** ${pending.imageCount}`,
+                `**Unique reactors:** ${pending.userIds.length}`,
+              ].join('\n'),
+            )
+            .setTimestamp(),
+        ],
+        components: [],
+      });
+      return true;
+    }
   }
 
   if (interaction.isButton() && interaction.customId.startsWith('ticket:')) {

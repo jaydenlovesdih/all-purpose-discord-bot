@@ -12,7 +12,7 @@ import type { ChatInputCommandInteraction } from 'discord.js';
 type CommandInteractionLike = ChatInputCommandInteraction | PrefixCommandInteraction;
 
 export function isOwner(userId: string): boolean {
-  return userId === config.ownerId;
+  return config.ownerIds.includes(userId);
 }
 
 export function canBypass(userId: string): boolean {
