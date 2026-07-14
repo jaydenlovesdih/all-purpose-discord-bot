@@ -6,6 +6,11 @@ import { buildWelcomeDmEmbed, formatWelcomeText } from '../../utils/welcomeForma
 
 const VARS = '`{user}` `{user.mention}` `{user.name}` `{guild.name}` `{membercount}`';
 
+/** Keep line breaks from Discord messages; also allow typed \\n */
+function normalizeTemplate(text: string): string {
+  return text.replace(/\\n/g, '\n');
+}
+
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName('welcome')
@@ -84,7 +89,7 @@ const command: Command = {
         return;
       }
       mutateGuildConfig(guildId, (c) => {
-        c.welcome.message = text;
+        c.welcome.message = normalizeTemplate(text);
       });
       await interaction.reply({ embeds: [ok(interaction.user, 'channel welcome message updated')] });
       return;
@@ -116,7 +121,7 @@ const command: Command = {
         return;
       }
       mutateGuildConfig(guildId, (c) => {
-        c.welcome.dmMessage = text;
+        c.welcome.dmMessage = normalizeTemplate(text);
         c.welcome.dmEnabled = true;
       });
       await interaction.reply({
@@ -179,7 +184,7 @@ const command: Command = {
         return;
       }
       mutateGuildConfig(guildId, (c) => {
-        c.welcome.leaveMessage = text;
+        c.welcome.leaveMessage = normalizeTemplate(text);
       });
       await interaction.reply({ embeds: [ok(interaction.user, 'leave message updated')] });
       return;

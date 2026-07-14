@@ -25,7 +25,8 @@ export class PrefixOptions {
 
       if (arg.type === 'rest') {
         if (remaining || arg.required) {
-          this.values.set(arg.name, remaining.trim());
+          // Preserve internal newlines; only trim spaces/tabs on the edges
+          this.values.set(arg.name, remaining.replace(/^[^\S\n]+|[^\S\n]+$/g, ''));
         }
         break;
       }
@@ -317,15 +318,16 @@ export function parsePrefixMessage(
 ): { command: string; args: string } | null {
   if (!content.startsWith(prefix)) return null;
 
-  const body = content.slice(prefix.length).trim();
+  // Only strip leading whitespace so newlines in the message body are kept
+  const body = content.slice(prefix.length).replace(/^[^\S\n]+/, '');
   if (!body) return null;
 
-  const [command, ...rest] = body.split(/\s+/);
-  const normalized = command.toLowerCase();
+  const match = body.match(/^(\S+)(?:[^\S\n]+([\s\S]*))?$/);
+  if (!match) return null;
 
   return {
-    command: normalized,
-    args: rest.join(' '),
+    command: match[1].toLowerCase(),
+    args: (match[2] ?? '').replace(/\s+$/, ''),
   };
 }
 
