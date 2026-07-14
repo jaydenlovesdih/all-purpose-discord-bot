@@ -3,7 +3,8 @@ import { Command } from '../../types/index.js';
 import { canBypass } from '../../utils/permissions.js';
 import { sendInvoke } from '../../utils/moderation.js';
 import { parseDurationMs, formatDuration } from '../../utils/duration.js';
-import { ok, fail } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -46,7 +47,7 @@ const command: Command = {
     }
 
     await member.timeout(ms, reason);
-    const used = await sendInvoke(
+    await sendInvoke(
       {
         guild: interaction.guild!,
         action: 'timeout',
@@ -55,17 +56,20 @@ const command: Command = {
         reason,
         extra: { duration: formatDuration(ms) },
       },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+      null,
     );
 
-    if (used) {
-      await interaction.reply({ content: '👍' });
-    } else {
-      await interaction.reply({
-        content: '👍',
-        embeds: [ok(interaction.user, `timed out ${user} for \`${formatDuration(ms)}\` · **${reason}**`)],
-      });
-    }
+    const embed = buildModEmbed({
+      action: 'timeout',
+      target: user,
+      moderator: interaction.user,
+      reason,
+      member,
+      extraLine: `Duration: \`${formatDuration(ms)}\``,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('timeout', user.id);
+    await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
   },
 };
 

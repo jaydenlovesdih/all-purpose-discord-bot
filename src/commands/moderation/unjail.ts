@@ -2,7 +2,8 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { getGuildConfig, mutateGuildConfig } from '../../utils/guildConfig.js';
 import { sendInvoke } from '../../utils/moderation.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -17,7 +18,10 @@ const command: Command = {
     const cfg = getGuildConfig(interaction.guildId!);
 
     if (!member || !cfg.jailRoleId) {
-      await interaction.reply({ embeds: [errorEmbed('Member not found or jail is not set up.')], ephemeral: true });
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Member not found or jail is not set up')],
+        ephemeral: true,
+      });
       return;
     }
 
@@ -30,16 +34,21 @@ const command: Command = {
       delete c.jailedRoles[user.id];
     });
 
-    const used = await sendInvoke(
+    await sendInvoke(
       { guild: interaction.guild!, action: 'unjail', user, moderator: interaction.user, reason: 'Unjailed' },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+      null,
     );
 
-    if (!used) {
-      await interaction.reply({ embeds: [successEmbed(`Unjailed **${user.tag}**`)] });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: 'Done.', ephemeral: true });
-    }
+    const embed = buildModEmbed({
+      action: 'unjail',
+      target: user,
+      moderator: interaction.user,
+      reason: 'Unjailed',
+      member,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('unjail', user.id);
+    await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
   },
 };
 

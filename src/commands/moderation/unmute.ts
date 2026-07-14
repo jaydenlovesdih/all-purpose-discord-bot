@@ -1,7 +1,8 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { sendInvoke } from '../../utils/moderation.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -15,25 +16,31 @@ const command: Command = {
     const member = interaction.guild!.members.cache.get(user.id);
 
     if (!member) {
-      await interaction.reply({ embeds: [errorEmbed('That user is not in this server.')], ephemeral: true });
+      await interaction.reply({ embeds: [fail(interaction.user, 'That user is not in this server')], ephemeral: true });
       return;
     }
 
     if (!member.isCommunicationDisabled()) {
-      await interaction.reply({ embeds: [errorEmbed('That member is not muted.')], ephemeral: true });
+      await interaction.reply({ embeds: [fail(interaction.user, 'That member is not muted')], ephemeral: true });
       return;
     }
 
     await member.timeout(null);
-    const used = await sendInvoke(
+    await sendInvoke(
       { guild: interaction.guild!, action: 'untimeout', user, moderator: interaction.user, reason: 'Unmuted' },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+      null,
     );
-    if (!used) {
-      await interaction.reply({ embeds: [successEmbed(`Unmuted **${user.tag}**`)] });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: 'Done.', ephemeral: true });
-    }
+
+    const embed = buildModEmbed({
+      action: 'unmute',
+      target: user,
+      moderator: interaction.user,
+      reason: 'Unmuted',
+      member,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('unmute', user.id);
+    await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
   },
 };
 

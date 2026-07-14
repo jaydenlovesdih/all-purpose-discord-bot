@@ -2,7 +2,8 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { mutateGuildConfig, getGuildConfig } from '../../utils/guildConfig.js';
 import { sendInvoke } from '../../utils/moderation.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { ok } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -17,12 +18,13 @@ const command: Command = {
     const reason = interaction.options.getString('reason') ?? 'No reason provided';
     const cfg = getGuildConfig(interaction.guildId!);
     const already = cfg.hardbans.includes(user.id);
+    const member = interaction.guild!.members.cache.get(user.id) ?? null;
 
     if (already) {
       mutateGuildConfig(interaction.guildId!, (c) => {
         c.hardbans = c.hardbans.filter((id) => id !== user.id);
       });
-      await interaction.reply({ embeds: [successEmbed(`Removed hardban for **${user.tag}**`)] });
+      await interaction.reply({ embeds: [ok(interaction.user, `removed hardban for **${user.tag}**`)] });
       return;
     }
 
@@ -31,16 +33,21 @@ const command: Command = {
       if (!c.hardbans.includes(user.id)) c.hardbans.push(user.id);
     });
 
-    const used = await sendInvoke(
+    await sendInvoke(
       { guild: interaction.guild!, action: 'hardban', user, moderator: interaction.user, reason },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+      null,
     );
 
-    if (!used) {
-      await interaction.reply({ embeds: [successEmbed(`Hardbanned **${user.tag}**\n**Reason:** ${reason}`)] });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: 'Done.', ephemeral: true });
-    }
+    const embed = buildModEmbed({
+      action: 'hardban',
+      target: user,
+      moderator: interaction.user,
+      reason,
+      member,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('hardban', user.id);
+    await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
   },
 };
 

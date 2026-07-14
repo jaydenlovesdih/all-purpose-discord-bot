@@ -135,7 +135,18 @@ export interface GuildConfig {
   autoresponders: AutoresponderEntry[];
   fakePermissions: Record<string, string[]>;
   afk: Record<string, { reason: string; since: number }>;
-  giveaways: Record<string, { prize: string; endsAt: number; winners: number; channelId: string; hostId: string; ended: boolean }>;
+  giveaways: Record<
+    string,
+    {
+      prize: string;
+      endsAt: number;
+      winners: number;
+      channelId: string;
+      hostId: string;
+      ended: boolean;
+      entrants?: string[];
+    }
+  >;
   caseId?: number;
 }
 

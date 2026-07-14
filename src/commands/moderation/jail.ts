@@ -3,7 +3,10 @@ import { Command } from '../../types/index.js';
 import { getGuildConfig, mutateGuildConfig } from '../../utils/guildConfig.js';
 import { sendInvoke, stripRoles } from '../../utils/moderation.js';
 import { canBypass } from '../../utils/permissions.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { ok, fail } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed, usageEmbed } from '../../utils/modResponse.js';
+import { getPrefix } from '../../utils/setup.js';
+import { config } from '../../config.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -26,32 +29,33 @@ const command: Command = {
   async execute(interaction) {
     const action = interaction.options.getString('action');
     const guild = interaction.guild!;
+    const prefix = getPrefix(guild.id, config.prefix);
 
     if (action === 'channel') {
       mutateGuildConfig(guild.id, (c) => {
         c.jailChannelId = interaction.channelId;
       });
-      await interaction.reply({ embeds: [successEmbed(`Jail channel set to ${interaction.channel}`)] });
+      await interaction.reply({ embeds: [ok(interaction.user, `jail channel set to ${interaction.channel}`)] });
       return;
     }
 
     if (action === 'role') {
       const role = interaction.options.getRole('role');
       if (!role) {
-        await interaction.reply({ embeds: [errorEmbed('Provide a role.')], ephemeral: true });
+        await interaction.reply({ embeds: [fail(interaction.user, 'Provide a role')], ephemeral: true });
         return;
       }
       mutateGuildConfig(guild.id, (c) => {
         c.jailRoleId = role.id;
       });
-      await interaction.reply({ embeds: [successEmbed(`Jail role set to **${role.name}**`)] });
+      await interaction.reply({ embeds: [ok(interaction.user, `jail role set to **${role.name}**`)] });
       return;
     }
 
     const user = interaction.options.getUser('user');
     if (!user) {
       await interaction.reply({
-        embeds: [errorEmbed('Usage: `.jail @user [reason]` or `/jail user:@user`')],
+        embeds: [usageEmbed('jail', `${prefix}jail @user [reason]`, prefix)],
         ephemeral: true,
       });
       return;
@@ -61,14 +65,17 @@ const command: Command = {
     const cfg = getGuildConfig(guild.id);
     if (!member || !cfg.jailRoleId) {
       await interaction.reply({
-        embeds: [errorEmbed('Member not found or run `.setup` first.')],
+        embeds: [fail(interaction.user, `Member not found or run \`${prefix}setup\` first`)],
         ephemeral: true,
       });
       return;
     }
 
-    if (!canBypass(interaction.user.id) && member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position) {
-      await interaction.reply({ embeds: [errorEmbed('You cannot jail this member.')], ephemeral: true });
+    if (
+      !canBypass(interaction.user.id) &&
+      member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position
+    ) {
+      await interaction.reply({ embeds: [fail(interaction.user, 'You cannot jail this member')], ephemeral: true });
       return;
     }
 
@@ -80,16 +87,18 @@ const command: Command = {
     await stripRoles(member, cfg.jailRoleId);
     await member.roles.add(cfg.jailRoleId, reason);
 
-    const used = await sendInvoke(
-      { guild, action: 'jail', user, moderator: interaction.user, reason },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
-    );
+    await sendInvoke({ guild, action: 'jail', user, moderator: interaction.user, reason }, null);
 
-    if (!used) {
-      await interaction.reply({ embeds: [successEmbed(`Jailed **${user.tag}**\n**Reason:** ${reason}`)] });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: 'Done.', ephemeral: true });
-    }
+    const embed = buildModEmbed({
+      action: 'jail',
+      target: user,
+      moderator: interaction.user,
+      reason,
+      member,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('jail', user.id);
+    await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
   },
 };
 

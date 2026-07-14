@@ -1,7 +1,8 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { sendInvoke } from '../../utils/moderation.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -18,17 +19,22 @@ const command: Command = {
     try {
       const user = await interaction.client.users.fetch(userId);
       await interaction.guild!.members.unban(userId, reason);
-      const used = await sendInvoke(
+      await sendInvoke(
         { guild: interaction.guild!, action: 'unban', user, moderator: interaction.user, reason },
-        interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+        null,
       );
-      if (!used) {
-        await interaction.reply({ embeds: [successEmbed(`Unbanned **${user.tag}**`)] });
-      } else if (!interaction.replied) {
-        await interaction.reply({ content: 'Done.', ephemeral: true });
-      }
+
+      const embed = buildModEmbed({
+        action: 'unban',
+        target: user,
+        moderator: interaction.user,
+        reason,
+        botName: interaction.client.user?.username,
+      });
+      const row = buildModButtons('unban', user.id);
+      await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
     } catch {
-      await interaction.reply({ embeds: [errorEmbed('Could not unban that user ID.')], ephemeral: true });
+      await interaction.reply({ embeds: [fail(interaction.user, 'Could not unban that user ID')], ephemeral: true });
     }
   },
 };

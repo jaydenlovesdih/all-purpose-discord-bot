@@ -2,7 +2,7 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { addWarning, getWarnings } from '../../utils/warnings.js';
 import { sendInvoke } from '../../utils/moderation.js';
-import { successEmbed } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -15,11 +15,12 @@ const command: Command = {
   async execute(interaction) {
     const user = interaction.options.getUser('user', true);
     const reason = interaction.options.getString('reason', true);
+    const member = interaction.guild!.members.cache.get(user.id) ?? null;
 
     addWarning(interaction.guildId!, user.id, interaction.user.id, reason);
     const count = getWarnings(interaction.guildId!, user.id).length;
 
-    const used = await sendInvoke(
+    await sendInvoke(
       {
         guild: interaction.guild!,
         action: 'warn',
@@ -28,16 +29,20 @@ const command: Command = {
         reason,
         extra: { warning_count: count },
       },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+      null,
     );
 
-    if (!used) {
-      await interaction.reply({
-        embeds: [successEmbed(`Warned **${user.tag}** (warning #${count})\n**Reason:** ${reason}`)],
-      });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: 'Done.', ephemeral: true });
-    }
+    const embed = buildModEmbed({
+      action: 'warn',
+      target: user,
+      moderator: interaction.user,
+      reason,
+      member,
+      extraLine: `Warning #${count}`,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('warn', user.id);
+    await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
   },
 };
 

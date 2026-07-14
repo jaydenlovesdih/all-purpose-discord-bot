@@ -1,6 +1,13 @@
-import { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { Command } from '../../types/index.js';
-import { Colors } from '../../utils/embeds.js';
+import { MOD_ACCENT } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -13,15 +20,30 @@ const command: Command = {
     const question = interaction.options.getString('question', true);
 
     const embed = new EmbedBuilder()
-      .setColor(Colors.primary)
+      .setColor(MOD_ACCENT)
       .setTitle('📊 Poll')
-      .setDescription(question)
+      .setDescription(`**${question}**\n\n✅ Yes: **0**\n❌ No: **0**`)
       .setFooter({ text: `Poll by ${interaction.user.tag}` })
       .setTimestamp();
 
-    const message = await interaction.reply({ embeds: [embed], fetchReply: true });
-    await message.react('✅');
-    await message.react('❌');
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('poll:yes')
+        .setLabel('Yes (0)')
+        .setEmoji('✅')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('poll:no')
+        .setLabel('No (0)')
+        .setEmoji('❌')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`poll:end:${interaction.user.id}`)
+        .setLabel('End Poll')
+        .setStyle(ButtonStyle.Secondary),
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row] });
   },
 };
 

@@ -1,11 +1,13 @@
-import { Events } from 'discord.js';
+import { EmbedBuilder, Events } from 'discord.js';
 import { config } from '../config.js';
 import { runCommand } from '../handlers/commandRunner.js';
+import { rememberSuggestion, suggestionComponents } from '../handlers/components.js';
 import { BotClient } from '../types/index.js';
 import { runAutoMod } from '../utils/automod.js';
-import { errorEmbed } from '../utils/embeds.js';
 import { getGuildConfig, mutateGuildConfig } from '../utils/guildConfig.js';
 import { addMessageXp, canGainXp } from '../utils/levelsStore.js';
+import { suggestCommands } from '../utils/fuzzy.js';
+import { didYouMeanEmbed, usageEmbed, MOD_ACCENT } from '../utils/modResponse.js';
 import {
   buildMissingArgsMessage,
   isTextCommandChannel,
@@ -14,8 +16,7 @@ import {
 } from '../utils/prefixInteraction.js';
 import { prefixSchemas } from '../utils/prefixSchemas.js';
 import { getPrefix } from '../utils/setup.js';
-
-/** Built-in aliases matching Bleed/Greed muscle memory */
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 const BUILTIN_ALIASES: Record<string, string> = {
   timeout: 'timeout',
   to: 'timeout',
@@ -52,7 +53,6 @@ export default {
 
     const guildCfg = getGuildConfig(message.guild.id);
 
-    // AFK
     if (guildCfg.afk[message.author.id]) {
       mutateGuildConfig(message.guild.id, (c) => {
         delete c.afk[message.author.id];
@@ -70,7 +70,6 @@ export default {
       }
     }
 
-    // Autoresponder (before commands)
     for (const entry of guildCfg.autoresponders) {
       const content = message.content;
       const hit = entry.exact
@@ -86,7 +85,6 @@ export default {
 
     if (await runAutoMod(message)) return;
 
-    // Levels
     if (guildCfg.levels.enabled && canGainXp(message.guild.id, message.author.id)) {
       const result = addMessageXp(message.guild.id, message.author.id);
       if (result.leveled) {
@@ -118,8 +116,38 @@ export default {
       guildCfg.aliases[parsed.command] ??
       parsed.command;
 
-    const command = client.commands.get(resolved);
-    if (!command) return;
+    const allNames = [
+      ...client.commands.keys(),
+      ...Object.keys(BUILTIN_ALIASES),
+      ...Object.keys(guildCfg.aliases),
+    ];
+    const uniqueNames = [...new Set(allNames)];
+
+    let command = client.commands.get(resolved);
+    if (!command) {
+      const suggestions = suggestCommands(parsed.command, uniqueNames)
+        .map((name) => BUILTIN_ALIASES[name] ?? guildCfg.aliases[name] ?? name)
+        .filter((name, index, arr) => client.commands.has(name) && arr.indexOf(name) === index)
+        .slice(0, 5);
+
+      if (!suggestions.length) {
+        await message.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(MOD_ACCENT)
+              .setDescription(`Unknown command \`${prefix}${parsed.command}\`\nTry \`${prefix}help\``),
+          ],
+        });
+        return;
+      }
+
+      const sent = await message.reply({
+        embeds: [didYouMeanEmbed(client.user?.username ?? 'Bot')],
+        components: suggestionComponents(suggestions),
+      });
+      rememberSuggestion(sent.id, message.author.id, parsed.args, prefix, message);
+      return;
+    }
 
     const schema = prefixSchemas[resolved] ?? prefixSchemas[parsed.command];
     if (schema === undefined) return;
@@ -129,15 +157,29 @@ export default {
       await runCommand(interaction, client);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('Missing required')) {
+        const usage = buildMissingArgsMessage(resolved, prefix).replace(/^Usage:\s*/, '');
         await message.reply({
-          embeds: [errorEmbed(`${error.message}\n${buildMissingArgsMessage(resolved, prefix)}`)],
+          embeds: [usageEmbed(resolved, usage, prefix)],
+          components: [
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('suggest:no')
+                .setLabel('Dismiss')
+                .setStyle(ButtonStyle.Secondary),
+            ),
+          ],
         });
         return;
       }
 
       console.error(`Prefix command error ${prefix}${resolved}:`, error);
+      const usage = buildMissingArgsMessage(resolved, prefix).replace(/^Usage:\s*/, '');
       await message.reply({
-        embeds: [errorEmbed(`Command failed: ${error instanceof Error ? error.message : 'unknown error'}`)],
+        embeds: [
+          usageEmbed(resolved, usage, prefix).setDescription(
+            `Something went wrong running this command.\n\n**Usage**\n\`${usage}\`\n\n\`${error instanceof Error ? error.message : 'unknown error'}\``,
+          ),
+        ],
       });
     }
   },

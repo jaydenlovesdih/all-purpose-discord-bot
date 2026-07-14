@@ -1,7 +1,14 @@
-import { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { Command } from '../../types/index.js';
 import { getWarnings } from '../../utils/warnings.js';
-import { Colors } from '../../utils/embeds.js';
+import { MOD_ACCENT } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -20,19 +27,35 @@ const command: Command = {
     }
 
     const embed = new EmbedBuilder()
-      .setColor(Colors.warning)
-      .setTitle(`Warnings for ${user.tag}`)
+      .setColor(MOD_ACCENT)
+      .setTitle(`⚠️ Warnings for ${user.username}`)
+      .setThumbnail(user.displayAvatarURL({ size: 256 }))
       .setDescription(
         warnings
           .map(
             (w, i) =>
-              `**#${i + 1}** — <t:${Math.floor(w.timestamp / 1000)}:f>\nMod: <@${w.moderatorId}>\nReason: ${w.reason}`,
+              `**#${i + 1}** — <t:${Math.floor(w.timestamp / 1000)}:f>\n🛡️ Mod: <@${w.moderatorId}>\n📝 Reason: ${w.reason}`,
           )
           .join('\n\n'),
       )
-      .setFooter({ text: `${warnings.length} total warning(s)` });
+      .addFields(
+        { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: false },
+        { name: '📝 Total:', value: String(warnings.length), inline: false },
+      )
+      .setFooter({
+        text: `User ID: ${user.id} | ${interaction.client.user?.username ?? 'Bot'}`,
+      })
+      .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`mod:clearwarns:${user.id}`)
+        .setLabel('Clear Warnings')
+        .setEmoji('🧹')
+        .setStyle(ButtonStyle.Danger),
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row] });
   },
 };
 

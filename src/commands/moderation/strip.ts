@@ -2,7 +2,8 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { stripRoles, sendInvoke } from '../../utils/moderation.js';
 import { canBypass } from '../../utils/permissions.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -18,26 +19,42 @@ const command: Command = {
     const member = interaction.guild!.members.cache.get(user.id);
 
     if (!member) {
-      await interaction.reply({ embeds: [errorEmbed('User not in this server.')], ephemeral: true });
+      await interaction.reply({ embeds: [fail(interaction.user, 'User not in this server')], ephemeral: true });
       return;
     }
 
-    if (!canBypass(interaction.user.id) && member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position) {
-      await interaction.reply({ embeds: [errorEmbed('You cannot strip this member.')], ephemeral: true });
+    if (
+      !canBypass(interaction.user.id) &&
+      member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position
+    ) {
+      await interaction.reply({ embeds: [fail(interaction.user, 'You cannot strip this member')], ephemeral: true });
       return;
     }
 
     const removed = await stripRoles(member);
-    const used = await sendInvoke(
-      { guild: interaction.guild!, action: 'strip', user, moderator: interaction.user, reason, extra: { roles_removed: removed.length } },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+    await sendInvoke(
+      {
+        guild: interaction.guild!,
+        action: 'strip',
+        user,
+        moderator: interaction.user,
+        reason,
+        extra: { roles_removed: removed.length },
+      },
+      null,
     );
 
-    if (!used) {
-      await interaction.reply({ embeds: [successEmbed(`Stripped **${removed.length}** role(s) from **${user.tag}**`)] });
-    } else if (!interaction.replied) {
-      await interaction.reply({ content: 'Done.', ephemeral: true });
-    }
+    const embed = buildModEmbed({
+      action: 'strip',
+      target: user,
+      moderator: interaction.user,
+      reason,
+      member,
+      extraLine: `Removed **${removed.length}** role(s)`,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('strip', user.id);
+    await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
   },
 };
 

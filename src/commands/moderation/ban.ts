@@ -2,7 +2,8 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { canBypass } from '../../utils/permissions.js';
 import { sendInvoke } from '../../utils/moderation.js';
-import { ok, fail } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
+import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -19,7 +20,7 @@ const command: Command = {
     const user = interaction.options.getUser('user', true);
     const reason = interaction.options.getString('reason') ?? 'No reason provided';
     const deleteDays = interaction.options.getInteger('delete_days') ?? 0;
-    const member = interaction.guild!.members.cache.get(user.id);
+    const member = interaction.guild!.members.cache.get(user.id) ?? null;
 
     if (user.id === interaction.user.id) {
       await interaction.reply({ embeds: [fail(interaction.user, 'You cannot ban yourself')], ephemeral: true });
@@ -31,26 +32,38 @@ const command: Command = {
         await interaction.reply({ embeds: [fail(interaction.user, 'I cannot ban this member')], ephemeral: true });
         return;
       }
-      if (member.roles.highest.position >= (interaction.member as import('discord.js').GuildMember).roles.highest.position) {
-        await interaction.reply({ embeds: [fail(interaction.user, 'You cannot ban someone with equal or higher roles')], ephemeral: true });
+      if (
+        member.roles.highest.position >=
+        (interaction.member as import('discord.js').GuildMember).roles.highest.position
+      ) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'You cannot ban someone with equal or higher roles')],
+          ephemeral: true,
+        });
         return;
       }
     }
 
     await interaction.guild!.members.ban(user.id, { deleteMessageSeconds: deleteDays * 86400, reason });
-    const used = await sendInvoke(
+    await sendInvoke(
       { guild: interaction.guild!, action: 'ban', user, moderator: interaction.user, reason },
-      interaction.channel?.isTextBased() ? (interaction.channel as import('discord.js').TextChannel) : null,
+      null,
     );
 
-    if (used) {
-      await interaction.reply({ content: '👍' });
-    } else {
-      await interaction.reply({
-        content: '👍',
-        embeds: [ok(interaction.user, `banned ${user} for **${reason}**`)],
-      });
-    }
+    const embed = buildModEmbed({
+      action: 'ban',
+      target: user,
+      moderator: interaction.user,
+      reason,
+      member,
+      botName: interaction.client.user?.username,
+    });
+    const row = buildModButtons('ban', user.id);
+
+    await interaction.reply({
+      embeds: [embed],
+      components: row ? [row] : [],
+    });
   },
 };
 
