@@ -63,7 +63,10 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'user', type: 'user', required: true },
     { name: 'reason', type: 'rest' },
   ],
-  purge: [{ name: 'amount', type: 'integer', required: true }],
+  purge: [
+    { name: 'user', type: 'user' },
+    { name: 'amount', type: 'integer', required: true },
+  ],
   warn: [
     { name: 'user', type: 'user', required: true },
     { name: 'reason', type: 'rest', required: true },

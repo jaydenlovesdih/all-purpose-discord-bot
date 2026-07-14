@@ -100,25 +100,40 @@ export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
     .setTimestamp();
 }
 
-/** Purge has no user target — same layout with channel instead of thumbnail user */
+/** Purge embed — same field layout as other mod cases */
 export function buildPurgeEmbed(opts: {
   moderator: User;
   amount: number;
   channelMention: string;
   botName?: string;
+  target?: User;
 }): EmbedBuilder {
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(Colors.success)
     .setTitle('🗑️ Messages Purged')
-    .setDescription(`**${opts.amount}** message(s) have been deleted.`)
+    .setDescription(
+      opts.target
+        ? `Deleted **${opts.amount}** message(s) from **${opts.target.username}**.`
+        : `**${opts.amount}** message(s) have been deleted.`,
+    )
     .addFields(
       { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: false },
-      { name: '📝 Reason:', value: 'Bulk delete', inline: false },
+      {
+        name: '📝 Reason:',
+        value: opts.target ? `User purge (${opts.target})` : 'Bulk delete',
+        inline: false,
+      },
       { name: '#️⃣ Channel:', value: opts.channelMention, inline: false },
       { name: '⚙️ Method:', value: '🛡️ Staff Permission', inline: false },
     )
     .setFooter({ text: opts.botName ?? 'Bot' })
     .setTimestamp();
+
+  if (opts.target) {
+    embed.setThumbnail(opts.target.displayAvatarURL({ size: 256 }));
+  }
+
+  return embed;
 }
 
 export function buildModButtons(

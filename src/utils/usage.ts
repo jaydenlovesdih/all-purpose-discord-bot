@@ -17,7 +17,7 @@ const EXAMPLES: Record<string, string> = {
   warnings: '@user',
   clearwarnings: '@user appealed',
   role: '@user @Member',
-  purge: '25',
+  purge: '@user 1000',
   filter: 'add badword',
   antiraid: 'toggle on',
   antinuke: 'toggle on',
