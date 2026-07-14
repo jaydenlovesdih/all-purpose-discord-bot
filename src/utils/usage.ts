@@ -30,7 +30,7 @@ const EXAMPLES: Record<string, string> = {
   snipe: '1',
   editsnipe: '1',
   afk: 'brb food',
-  welcome: 'message Welcome {user.mention}!',
+  welcome: 'dmmessage Welcome to {guild.name}, {user.name}!',
   levels: 'toggle on',
   starboard: 'emoji ⭐',
   giveaway: '1h Nitro Classic',

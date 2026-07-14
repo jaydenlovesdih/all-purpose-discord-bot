@@ -77,6 +77,9 @@ export interface WelcomeConfig {
   enabled: boolean;
   channelId?: string;
   message: string;
+  /** Send a customizable DM when a member joins */
+  dmEnabled: boolean;
+  dmMessage: string;
   leaveEnabled: boolean;
   leaveChannelId?: string;
   leaveMessage: string;
@@ -230,6 +233,9 @@ const DEFAULT_LEVELS: LevelsConfig = {
 const DEFAULT_WELCOME: WelcomeConfig = {
   enabled: false,
   message: 'Welcome {user.mention} to **{guild.name}**!',
+  dmEnabled: false,
+  dmMessage:
+    'Hey {user.name}! Welcome to **{guild.name}**. Thanks for joining — check the rules and say hi!',
   leaveEnabled: false,
   leaveMessage: '**{user.name}** left **{guild.name}**.',
   autoRoleIds: [],

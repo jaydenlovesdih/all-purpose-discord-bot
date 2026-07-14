@@ -2,6 +2,7 @@ import { EmbedBuilder, Events, TextChannel } from 'discord.js';
 import { BotClient } from '../types/index.js';
 import { getGuildConfig } from '../utils/guildConfig.js';
 import { Colors } from '../utils/embeds.js';
+import { buildWelcomeDmEmbed, formatWelcomeText } from '../utils/welcomeFormat.js';
 
 const joinBucket = new Map<string, number[]>();
 
@@ -10,13 +11,11 @@ export default {
   async execute(member: import('discord.js').GuildMember, _client: BotClient) {
     const cfg = getGuildConfig(member.guild.id);
 
-    // Hardban enforcement
     if (cfg.hardbans.includes(member.id)) {
       await member.ban({ reason: 'Hardban enforcement' }).catch(() => undefined);
       return;
     }
 
-    // AntiRaid
     if (cfg.antiraid.enabled && !cfg.antiraid.whitelist.includes(member.id)) {
       const now = Date.now();
       const stamps = (joinBucket.get(member.guild.id) ?? []).filter((t) => now - t < 60_000);
@@ -64,7 +63,15 @@ export default {
           const log = member.guild.channels.cache.get(cfg.antiraid.logChannelId);
           if (log?.isTextBased()) {
             await (log as TextChannel)
-              .send({ embeds: [new EmbedBuilder().setColor(Colors.error).setTitle('AntiRaid Action').setDescription(`${member} — ${reason}`).setTimestamp()] })
+              .send({
+                embeds: [
+                  new EmbedBuilder()
+                    .setColor(Colors.error)
+                    .setTitle('AntiRaid Action')
+                    .setDescription(`${member} — ${reason}`)
+                    .setTimestamp(),
+                ],
+              })
               .catch(() => undefined);
           }
         }
@@ -72,22 +79,23 @@ export default {
       }
     }
 
-    // Autoroles
     for (const roleId of cfg.welcome.autoRoleIds) {
       await member.roles.add(roleId).catch(() => undefined);
     }
 
-    // Welcome
     if (cfg.welcome.enabled && cfg.welcome.channelId) {
       const channel = member.guild.channels.cache.get(cfg.welcome.channelId);
       if (channel?.isTextBased() && channel.isSendable()) {
-        const text = cfg.welcome.message
-          .replaceAll('{user}', member.toString())
-          .replaceAll('{user.mention}', member.toString())
-          .replaceAll('{user.name}', member.user.username)
-          .replaceAll('{guild.name}', member.guild.name);
+        const text = formatWelcomeText(cfg.welcome.message, member);
         await channel.send(text).catch(() => undefined);
       }
+    }
+
+    if (cfg.welcome.dmEnabled) {
+      const text = formatWelcomeText(cfg.welcome.dmMessage, member);
+      await member
+        .send({ embeds: [buildWelcomeDmEmbed(member, text)] })
+        .catch(() => undefined);
     }
   },
 };
