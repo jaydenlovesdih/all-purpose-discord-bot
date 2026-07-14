@@ -66,7 +66,6 @@ export interface ModEmbedOptions {
 
 export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
   const meta = TITLES[opts.action];
-  const method = opts.method ?? '🛡️ Staff Permission';
   const display = opts.target.username;
 
   const description = opts.extraLine
@@ -89,10 +88,9 @@ export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
     .setDescription(description)
     .setThumbnail(opts.target.displayAvatarURL({ size: 256 }))
     .addFields(
-      { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: false },
-      { name: '📝 Reason:', value: opts.reason || 'No reason provided', inline: false },
-      { name: detail.name, value: detail.value, inline: false },
-      { name: '⚙️ Method:', value: method, inline: false },
+      { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: true },
+      { name: '📝 Reason:', value: opts.reason || 'No reason provided', inline: true },
+      { name: detail.name, value: detail.value, inline: true },
     )
     .setFooter({
       text: `User ID: ${opts.target.id} | ${opts.botName ?? 'Bot'}`,
@@ -100,7 +98,7 @@ export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
     .setTimestamp();
 }
 
-/** Purge embed — same field layout as other mod cases */
+/** Purge embed — Reason + Channel side by side */
 export function buildPurgeEmbed(opts: {
   moderator: User;
   amount: number;
@@ -117,14 +115,13 @@ export function buildPurgeEmbed(opts: {
         : `**${opts.amount}** message(s) have been deleted.`,
     )
     .addFields(
-      { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: false },
+      { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: true },
       {
         name: '📝 Reason:',
         value: opts.target ? `User purge (${opts.target})` : 'Bulk delete',
-        inline: false,
+        inline: true,
       },
-      { name: '#️⃣ Channel:', value: opts.channelMention, inline: false },
-      { name: '⚙️ Method:', value: '🛡️ Staff Permission', inline: false },
+      { name: '#️⃣ Channel:', value: opts.channelMention, inline: true },
     )
     .setFooter({ text: opts.botName ?? 'Bot' })
     .setTimestamp();

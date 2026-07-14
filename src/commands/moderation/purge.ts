@@ -100,7 +100,7 @@ const command: Command = {
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     try {
       const deleted = await purgeMessages(channel as TextChannel, amount, target?.id);
@@ -115,10 +115,16 @@ const command: Command = {
           }),
         ],
       });
+      setTimeout(() => {
+        void interaction.deleteReply().catch(() => undefined);
+      }, 5_000);
     } catch {
       await interaction.editReply({
         embeds: [fail(interaction.user, 'Could not delete some messages (check permissions / age)')],
       });
+      setTimeout(() => {
+        void interaction.deleteReply().catch(() => undefined);
+      }, 5_000);
     }
   },
 };

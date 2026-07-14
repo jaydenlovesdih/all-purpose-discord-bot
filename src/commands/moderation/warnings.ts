@@ -30,14 +30,13 @@ const command: Command = {
             .setTitle('⚠️ Warnings')
             .setDescription(`**${user.username}** has no warnings.`)
             .addFields(
-              { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: false },
-              { name: '📝 Reason:', value: 'Lookup', inline: false },
+              { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: true },
+              { name: '📝 Reason:', value: 'Lookup', inline: true },
               {
                 name: '💎 Boosting:',
                 value: member?.premiumSince ? '✅ Yes' : member ? '❎ No' : '❎ N/A',
-                inline: false,
+                inline: true,
               },
-              { name: '⚙️ Method:', value: '🛡️ Staff Permission', inline: false },
             )
             .setThumbnail(user.displayAvatarURL({ size: 256 }))
             .setFooter({
@@ -62,14 +61,13 @@ const command: Command = {
           .join('\n\n'),
       )
       .addFields(
-        { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: false },
-        { name: '📝 Reason:', value: 'Lookup', inline: false },
+        { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: true },
+        { name: '📝 Reason:', value: 'Lookup', inline: true },
         {
           name: '💎 Boosting:',
           value: member?.premiumSince ? '✅ Yes' : member ? '❎ No' : '❎ N/A',
-          inline: false,
+          inline: true,
         },
-        { name: '⚙️ Method:', value: '🛡️ Staff Permission', inline: false },
       )
       .setFooter({
         text: `User ID: ${user.id} | ${warnings.length} warning(s) | ${interaction.client.user?.username ?? 'Bot'}`,

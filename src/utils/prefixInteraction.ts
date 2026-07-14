@@ -307,6 +307,13 @@ export class PrefixCommandInteraction {
     this.replyMessage = sent;
   }
 
+  async deleteReply(): Promise<void> {
+    if (this.replyMessage) {
+      await this.replyMessage.delete().catch(() => undefined);
+      this.replyMessage = null;
+    }
+  }
+
   async followUp(payload: ReplyPayload): Promise<Message> {
     return this.message.reply(payload as unknown as MessagePayload);
   }
