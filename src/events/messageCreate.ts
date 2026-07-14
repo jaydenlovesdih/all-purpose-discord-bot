@@ -19,11 +19,15 @@ import { prefixSchemas } from '../utils/prefixSchemas.js';
 import { getPrefix } from '../utils/setup.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { BUILTIN_ALIASES, resolveAlias } from '../utils/aliases.js';
+import { enforceDnr } from '../utils/dnr.js';
 
 export default {
   name: Events.MessageCreate,
   async execute(message: import('discord.js').Message, client: BotClient) {
     if (message.author.bot || !message.guild) return;
+
+    if (await enforceDnr(message, client)) return;
+
     if (!isTextCommandChannel(message.channel)) return;
 
     if (client.user && message.mentions.has(client.user) && !message.mentions.everyone) {

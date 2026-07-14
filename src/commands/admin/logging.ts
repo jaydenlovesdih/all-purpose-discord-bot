@@ -73,7 +73,7 @@ const command: Command = {
             `Mutes: ${ch.mutes ? `<#${ch.mutes}>` : '—'}`,
             `Jail: ${ch.jail ? `<#${ch.jail}>` : '—'}`,
             `Purge: ${ch.purge ? `<#${ch.purge}>` : '—'}`,
-            `Roles: ${ch.roles ? `<#${ch.roles}>` : '—'}`,
+            `Server (roles · channels): ${(ch.server ?? ch.roles) ? `<#${ch.server ?? ch.roles}>` : '—'}`,
             `Messages: ${ch.messages ? `<#${ch.messages}>` : '—'}`,
           ].join('\n'),
           'Logging',

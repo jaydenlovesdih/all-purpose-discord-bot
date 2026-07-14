@@ -38,6 +38,8 @@ const MOD_CMDS = new Set([
   'hardban',
   'unban',
   'strip',
+  'dnr',
+  'undnr',
   'filter',
   'antiraid',
   'antinuke',

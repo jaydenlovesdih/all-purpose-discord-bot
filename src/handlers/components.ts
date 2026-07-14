@@ -379,6 +379,26 @@ export async function handleComponent(
 
     if (action === 'edit') {
       const modAction = parts[2] as ModActionType;
+      if (modAction === 'dnr' || modAction === 'undnr') {
+        const protectorId = parts[3];
+        const targetId = parts[4];
+        const modal = new ModalBuilder()
+          .setCustomId(`modaledit:${modAction}:${protectorId}:${targetId}`)
+          .setTitle('Edit Reason')
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
+                .setCustomId('reason')
+                .setLabel('New reason')
+                .setStyle(TextInputStyle.Paragraph)
+                .setRequired(true)
+                .setMaxLength(500),
+            ),
+          );
+        await interaction.showModal(modal);
+        return true;
+      }
+
       const userId = parts[3];
       const modal = new ModalBuilder()
         .setCustomId(`modaledit:${modAction}:${userId}`)
@@ -394,6 +414,84 @@ export async function handleComponent(
           ),
         );
       await interaction.showModal(modal);
+      return true;
+    }
+
+    if (action === 'undnr') {
+      const protectorId = parts[2];
+      const targetId = parts[3];
+      const { removeDnr, getDnr } = await import('../utils/dnr.js');
+      const existing = getDnr(guild.id, protectorId, targetId);
+      if (!existing) {
+        await interaction.reply({ embeds: [fail(interaction.user, 'No active DNR found')], ephemeral: true });
+        return true;
+      }
+      // Only the protector (or bypass) can remove their DNR via button
+      if (interaction.user.id !== protectorId && !canBypass(interaction.user.id)) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Only the person who set this DNR can remove it')],
+          ephemeral: true,
+        });
+        return true;
+      }
+      removeDnr(guild.id, protectorId, targetId);
+      const user = await interaction.client.users.fetch(targetId).catch(() => null);
+      if (!user) {
+        await interaction.reply({ embeds: [fail(interaction.user, 'User not found')], ephemeral: true });
+        return true;
+      }
+      const member = await guild.members.fetch(targetId).catch(() => null);
+      const embed = buildModEmbed({
+        action: 'undnr',
+        target: user,
+        moderator: interaction.user,
+        reason: `Removed by ${interaction.user.tag}`,
+        member,
+        botName: interaction.client.user?.username,
+        detail: { name: '🚫 Was protecting:', value: `<@${protectorId}>` },
+      });
+      const row = buildModButtons('undnr', targetId, { protectorId });
+      await interaction.update({
+        embeds: [embed],
+        components: row ? [row] : [],
+      });
+      return true;
+    }
+
+    if (action === 'dnr') {
+      const protectorId = parts[2];
+      const targetId = parts[3];
+      if (interaction.user.id !== protectorId && !canBypass(interaction.user.id)) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Only the protected user can re-apply this DNR')],
+          ephemeral: true,
+        });
+        return true;
+      }
+      const { setDnr } = await import('../utils/dnr.js');
+      const reasonField = interaction.message.embeds[0]?.fields?.find((f) => f.name.includes('Reason'));
+      const reason = reasonField?.value ?? 'No reason provided';
+      setDnr(guild.id, protectorId, targetId, reason, interaction.user.id);
+      const user = await interaction.client.users.fetch(targetId).catch(() => null);
+      if (!user) {
+        await interaction.reply({ embeds: [fail(interaction.user, 'User not found')], ephemeral: true });
+        return true;
+      }
+      const member = await guild.members.fetch(targetId).catch(() => null);
+      const embed = buildModEmbed({
+        action: 'dnr',
+        target: user,
+        moderator: interaction.user,
+        reason,
+        member,
+        botName: interaction.client.user?.username,
+        detail: { name: '🚫 Protecting:', value: `<@${protectorId}>` },
+      });
+      const row = buildModButtons('dnr', targetId, { protectorId });
+      await interaction.update({
+        embeds: [embed],
+        components: row ? [row] : [],
+      });
       return true;
     }
 
@@ -543,10 +641,34 @@ export async function handleComponent(
 
   if (interaction.isModalSubmit() && interaction.customId.startsWith('modaledit:')) {
     if (!(await ensureMod(interaction))) return true;
-    const [, modAction, userId] = interaction.customId.split(':');
+    const parts = interaction.customId.split(':');
+    const modAction = parts[1];
     const reason = interaction.fields.getTextInputValue('reason');
     const message = interaction.message;
 
+    if (modAction === 'dnr' || modAction === 'undnr') {
+      const protectorId = parts[2];
+      const targetId = parts[3];
+      if (modAction === 'dnr') {
+        const { updateDnrReason } = await import('../utils/dnr.js');
+        updateDnrReason(interaction.guildId!, protectorId, targetId, reason);
+      }
+      if (message && 'edit' in message && message.embeds[0]) {
+        const builder = EmbedBuilder.from(message.embeds[0]);
+        const fields = message.embeds[0].fields.map((f) =>
+          f.name.includes('Reason') ? { ...f, value: reason } : f,
+        );
+        builder.setFields(fields);
+        await message.edit({ embeds: [builder] });
+      }
+      await interaction.reply({
+        embeds: [ok(interaction.user, `updated **${modAction}** reason for <@${targetId}>`)],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const userId = parts[2];
     if (message && 'edit' in message && message.embeds[0]) {
       const builder = EmbedBuilder.from(message.embeds[0]);
       const fields = message.embeds[0].fields.map((f) =>

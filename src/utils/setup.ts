@@ -10,14 +10,18 @@ import { getGuildConfig, LogChannels, updateGuildConfig } from './guildConfig.js
 const CATEGORY_NAME = 'blaze mod';
 const OLD_CATEGORY_NAMES = ['greed-mod', 'greed mod'];
 
-type LogChannelDef = { key: keyof LogChannels; name: string; topic: string };
+type LogChannelDef = {
+  key: Exclude<keyof LogChannels, 'roles'>;
+  name: string;
+  topic: string;
+};
 
 const LOG_CHANNELS: LogChannelDef[] = [
   { key: 'bans', name: 'bans', topic: 'Ban · Unban · Kick' },
   { key: 'mutes', name: 'mutes', topic: 'Mute · Unmute · Timeout' },
   { key: 'jail', name: 'jail-logs', topic: 'Jail · Unjail' },
   { key: 'purge', name: 'purge', topic: 'Message purges' },
-  { key: 'roles', name: 'roles', topic: 'Role changes' },
+  { key: 'server', name: 'server', topic: 'Roles · Channel create/delete' },
   { key: 'messages', name: 'messages', topic: 'Message delete history' },
 ];
 
@@ -98,7 +102,26 @@ export async function runServerSetup(guild: Guild): Promise<string> {
     });
   }
 
+  // Rename legacy `#roles` → `#server` in blaze mod
+  const legacyRoles = guild.channels.cache.find(
+    (c) =>
+      c.type === ChannelType.GuildText &&
+      c.name === 'roles' &&
+      c.parentId === category.id,
+  ) as TextChannel | undefined;
+  const existingServer = guild.channels.cache.find(
+    (c) =>
+      c.type === ChannelType.GuildText &&
+      c.name === 'server' &&
+      c.parentId === category.id,
+  );
+  if (legacyRoles && !existingServer) {
+    await legacyRoles.setName('server').catch(() => undefined);
+    await legacyRoles.setTopic('Roles · Channel create/delete').catch(() => undefined);
+  }
+
   const logChannels: LogChannels = { ...getGuildConfig(guild.id).logChannels };
+  delete logChannels.roles;
   const createdLines: string[] = [];
 
   for (const def of LOG_CHANNELS) {

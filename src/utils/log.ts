@@ -2,16 +2,22 @@ import { AttachmentBuilder, ChannelType, EmbedBuilder, Guild, TextChannel, User 
 import { getGuildConfig, LogChannels, mutateGuildConfig } from './guildConfig.js';
 import { Colors } from './embeds.js';
 
-export type LogChannelKey = keyof LogChannels;
+export type LogChannelKey = keyof Omit<LogChannels, 'roles'>;
 
-/** Channel names created by `,setup` under the blaze mod category */
+/** Channel names under the blaze mod category */
 export const LOG_CHANNEL_NAMES: Record<LogChannelKey, string> = {
   bans: 'bans',
   mutes: 'mutes',
   jail: 'jail-logs',
   purge: 'purge',
-  roles: 'roles',
+  server: 'server',
   messages: 'messages',
+};
+
+/** Legacy Discord channel names we still accept when rediscovering */
+const LEGACY_NAMES: Partial<Record<LogChannelKey, string[]>> = {
+  server: ['server', 'roles'],
+  jail: ['jail-logs', 'jail-log'],
 };
 
 const ACTION_CHANNEL: Record<string, LogChannelKey> = {
@@ -28,13 +34,41 @@ const ACTION_CHANNEL: Record<string, LogChannelKey> = {
   jail: 'jail',
   unjail: 'jail',
   purge: 'purge',
-  strip: 'roles',
-  roleadd: 'roles',
-  roleremove: 'roles',
+  strip: 'server',
+  roleadd: 'server',
+  roleremove: 'server',
+  warn: 'bans',
+  clearwarnings: 'bans',
+  dnr: 'bans',
+  undnr: 'bans',
 };
 
 export function logChannelForAction(action: string): LogChannelKey {
   return ACTION_CHANNEL[action] ?? 'bans';
+}
+
+/** Map logging.events keys → dedicated channels (never cross-wire) */
+export function logChannelForEvent(
+  event: keyof ReturnType<typeof getGuildConfig>['logging']['events'],
+): LogChannelKey | null {
+  switch (event) {
+    case 'messageDelete':
+    case 'messageEdit':
+      return 'messages';
+    case 'memberBan':
+    case 'memberUnban':
+      return 'bans';
+    case 'memberRole':
+    case 'role':
+    case 'channel':
+      return 'server';
+    case 'memberJoin':
+    case 'memberLeave':
+      // Not part of dedicated setup channels — skip unless you want them later
+      return null;
+    default:
+      return null;
+  }
 }
 
 function findModCategory(guild: Guild) {
@@ -45,43 +79,84 @@ function findModCategory(guild: Guild) {
   );
 }
 
+export function isBlazeModChannel(channel: {
+  guild: Guild;
+  parentId?: string | null;
+}): boolean {
+  if (!channel.parentId) return false;
+  const parent = channel.guild.channels.cache.get(channel.parentId);
+  return !!parent && parent.type === ChannelType.GuildCategory && parent.name.toLowerCase() === 'blaze mod';
+}
+
+function matchLogChannel(
+  guild: Guild,
+  categoryId: string,
+  key: LogChannelKey,
+): TextChannel | undefined {
+  const names = LEGACY_NAMES[key] ?? [LOG_CHANNEL_NAMES[key]];
+  return guild.channels.cache.find(
+    (c) =>
+      c.type === ChannelType.GuildText &&
+      c.parentId === categoryId &&
+      names.includes(c.name.toLowerCase()),
+  ) as TextChannel | undefined;
+}
+
 /** Re-find setup log channels by name (survives Railway wiping guilds.json) */
 export function discoverLogChannels(guild: Guild): LogChannels {
   const category = findModCategory(guild);
   if (!category) return {};
 
   const found: LogChannels = {};
-  for (const [key, name] of Object.entries(LOG_CHANNEL_NAMES) as [LogChannelKey, string][]) {
-    const channel = guild.channels.cache.find(
-      (c) => c.type === ChannelType.GuildText && c.parentId === category.id && c.name === name,
-    );
+  for (const key of Object.keys(LOG_CHANNEL_NAMES) as LogChannelKey[]) {
+    const channel = matchLogChannel(guild, category.id, key);
     if (channel) found[key] = channel.id;
   }
+
+  // Migrate old config key "roles" → "server" if we only have the old field
+  const cfg = getGuildConfig(guild.id);
+  if (!found.server && cfg.logChannels?.roles) {
+    found.server = cfg.logChannels.roles;
+  }
+
   return found;
 }
 
 /**
- * Resolve a log channel ID. If config was wiped on redeploy, rediscover
- * channels under "blaze mod" and persist them again.
+ * Resolve a log channel ID for a dedicated key.
+ * Never falls back to bans/other keys — that was sending wrong logs to wrong channels.
  */
 export function resolveLogChannelId(guild: Guild, key: LogChannelKey): string | undefined {
   const cfg = getGuildConfig(guild.id);
-  let id = cfg.logChannels?.[key] ?? cfg.logging.channelId ?? cfg.modLogChannelId;
+  let id = cfg.logChannels?.[key] ?? (key === 'server' ? cfg.logChannels?.roles : undefined);
 
-  // Stale / missing — rediscover from Discord
-  if (!id || !guild.channels.cache.has(id)) {
+  if (id) {
+    const existing = guild.channels.cache.get(id);
+    if (!existing) {
+      // Stale ID after wipe/channel delete
+      id = undefined;
+    }
+  }
+
+  if (!id) {
     const found = discoverLogChannels(guild);
     if (Object.keys(found).length) {
       mutateGuildConfig(guild.id, (c) => {
-        c.logChannels = { ...c.logChannels, ...found };
+        c.logChannels = {
+          ...c.logChannels,
+          ...found,
+        };
+        // Drop deprecated roles mirror once server is set
+        if (found.server) delete c.logChannels.roles;
         c.logging.enabled = true;
-        c.logging.channelId = c.logging.channelId ?? found.bans ?? Object.values(found)[0];
-        c.modLogChannelId = c.modLogChannelId ?? found.bans ?? Object.values(found)[0];
+        if (found.bans) {
+          c.logging.channelId = found.bans;
+          c.modLogChannelId = found.bans;
+        }
       });
-      id = found[key] ?? found.bans ?? Object.values(found)[0];
+      id = found[key];
     }
-  } else if (!cfg.logging.enabled && Object.values(cfg.logChannels ?? {}).some(Boolean)) {
-    // Channels configured but flag was reset to default false after redeploy
+  } else if (!cfg.logging.enabled) {
     mutateGuildConfig(guild.id, (c) => {
       c.logging.enabled = true;
     });
@@ -90,7 +165,7 @@ export function resolveLogChannelId(guild: Guild, key: LogChannelKey): string | 
   return id;
 }
 
-/** Clean Infinity-style log embed (matches mod command responses) */
+/** Clean Infinity-style log embed */
 export function buildServerLogEmbed(opts: {
   emoji: string;
   title: string;
@@ -165,7 +240,7 @@ export async function sendToLogChannel(
   await (channel as TextChannel).send({ embeds: [embed] }).catch(() => undefined);
 }
 
-/** Event-based logging (joins, channel create, etc.) */
+/** Event-based logging with strict channel routing */
 export async function sendLog(
   guild: Guild,
   event: keyof ReturnType<typeof getGuildConfig>['logging']['events'],
@@ -184,24 +259,34 @@ export async function sendLog(
     emoji?: string;
   },
 ): Promise<void> {
-  const key: LogChannelKey =
-    event === 'messageDelete' || event === 'messageEdit'
-      ? 'messages'
-      : event === 'memberRole' || event === 'role'
-        ? 'roles'
-        : event === 'memberBan' || event === 'memberUnban'
-          ? 'bans'
-          : 'messages';
+  const key = logChannelForEvent(event);
 
-  // Rediscover / enable happens inside resolveLogChannelId
+  // Events without a dedicated channel (joins/leaves) are skipped —
+  // never dump them into messages/bans.
+  if (!key) return;
+
+  const cfg = getGuildConfig(guild.id);
+  if (!cfg.logging.events[event]) {
+    // Auto-enable setup-related events after config wipe / rediscovery
+    if (
+      ['messageDelete', 'memberBan', 'memberUnban', 'memberRole', 'role', 'channel'].includes(event)
+    ) {
+      mutateGuildConfig(guild.id, (c) => {
+        c.logging.events[event] = true;
+      });
+    } else {
+      return;
+    }
+  }
+
   const channelId = resolveLogChannelId(guild, key);
   if (!channelId) return;
 
-  const cfg = getGuildConfig(guild.id);
-  // After rediscovery, events are on by default; if config still says off for this event, skip
-  // unless we just re-enabled logging from discovery (logging.enabled true)
-  if (!cfg.logging.enabled) return;
-  if (!cfg.logging.events[event]) return;
+  if (!getGuildConfig(guild.id).logging.enabled) {
+    mutateGuildConfig(guild.id, (c) => {
+      c.logging.enabled = true;
+    });
+  }
 
   let channel = guild.channels.cache.get(channelId);
   if (!channel) {
@@ -219,9 +304,11 @@ export async function sendLog(
           ? '🔨'
           : event === 'memberUnban'
             ? '🔓'
-            : event === 'memberRole' || event === 'role'
-              ? '🎭'
-              : '📋');
+            : event === 'channel'
+              ? '📁'
+              : event === 'memberRole' || event === 'role'
+                ? '🎭'
+                : '📋');
 
   const embed = buildServerLogEmbed({
     emoji,

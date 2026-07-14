@@ -84,6 +84,14 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'user', type: 'user', required: true },
     { name: 'reason', type: 'rest' },
   ],
+  dnr: [
+    { name: 'user', type: 'user', required: true },
+    { name: 'reason', type: 'rest' },
+  ],
+  undnr: [
+    { name: 'user', type: 'user', required: true },
+    { name: 'reason', type: 'rest' },
+  ],
   filter: [
     { name: 'subcommand', type: 'string', required: true },
     { name: 'value', type: 'string' },

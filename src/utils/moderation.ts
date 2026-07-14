@@ -74,6 +74,8 @@ const ACTION_META: Record<string, { emoji: string; title: string; verb: string }
   roleadd: { emoji: '➕', title: 'Role Added', verb: 'received a role.' },
   roleremove: { emoji: '➖', title: 'Role Removed', verb: 'had a role removed.' },
   warn: { emoji: '⚠️', title: 'User Warned', verb: 'has been warned.' },
+  dnr: { emoji: '🚫', title: 'Do Not Reply', verb: 'must not reply to your messages.' },
+  undnr: { emoji: '✅', title: 'DNR Removed', verb: 'may reply to you again.' },
 };
 
 export async function sendModLog(ctx: ModActionContext): Promise<number> {

@@ -102,10 +102,12 @@ export interface LogChannels {
   jail?: string;
   /** Purge */
   purge?: string;
-  /** Role add/remove / member role updates */
-  roles?: string;
-  /** Message delete history */
+  /** Role changes + channel create/delete (Discord channel name: server) */
+  server?: string;
+  /** Message delete / edit history */
   messages?: string;
+  /** @deprecated migrated to server */
+  roles?: string;
 }
 
 export interface LoggingConfig {
@@ -130,6 +132,17 @@ export interface AutoresponderEntry {
   exact: boolean;
 }
 
+/** Blocks targetId from replying to protectorId's messages */
+export interface DnrEntry {
+  protectorId: string;
+  targetId: string;
+  reason: string;
+  /** Violations while this DNR is active; jail at 3 */
+  strikes: number;
+  setBy: string;
+  setAt: number;
+}
+
 export interface GuildConfig {
   prefix?: string;
   jailRoleId?: string;
@@ -143,6 +156,8 @@ export interface GuildConfig {
   staffRoleIds: string[];
   hardbans: string[];
   jailedRoles: Record<string, string[]>;
+  /** Key: `${protectorId}:${targetId}` */
+  dnr: Record<string, DnrEntry>;
   invoke: Record<string, InvokeMessages>;
   automod: AutoModConfig;
   antiraid: AntiRaidConfig;
@@ -284,6 +299,7 @@ function defaults(): GuildConfig {
     staffRoleIds: [],
     hardbans: [],
     jailedRoles: {},
+    dnr: {},
     invoke: {},
     automod: { ...DEFAULT_AUTOMOD, words: [] },
     antiraid: { ...DEFAULT_ANTIRAID, whitelist: [] },
@@ -337,11 +353,19 @@ export function getGuildConfig(guildId: string): GuildConfig {
       ...raw.logging,
       events: { ...DEFAULT_LOGGING.events, ...raw.logging?.events },
     },
-    logChannels: { ...(raw.logChannels ?? {}) },
+    logChannels: (() => {
+      const lc: LogChannels = { ...(raw.logChannels ?? {}) };
+      if (!lc.server && lc.roles) {
+        lc.server = lc.roles;
+        delete lc.roles;
+      }
+      return lc;
+    })(),
     aliases: raw.aliases ?? {},
     autoresponders: raw.autoresponders ?? [],
     fakePermissions: raw.fakePermissions ?? {},
     staffRoleIds: raw.staffRoleIds ?? [],
+    dnr: raw.dnr ?? {},
   };
 }
 

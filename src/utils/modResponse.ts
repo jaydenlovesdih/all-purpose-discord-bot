@@ -29,7 +29,9 @@ export type ModActionType =
   | 'strip'
   | 'roleadd'
   | 'roleremove'
-  | 'purge';
+  | 'purge'
+  | 'dnr'
+  | 'undnr';
 
 const TITLES: Record<ModActionType, { emoji: string; title: string; verb: string }> = {
   ban: { emoji: '🔨', title: 'User Banned', verb: 'has been permanently banned.' },
@@ -49,6 +51,8 @@ const TITLES: Record<ModActionType, { emoji: string; title: string; verb: string
   roleadd: { emoji: '➕', title: 'Role Added', verb: 'received a role.' },
   roleremove: { emoji: '➖', title: 'Role Removed', verb: 'had a role removed.' },
   purge: { emoji: '🗑️', title: 'Messages Purged', verb: 'messages were deleted.' },
+  dnr: { emoji: '🚫', title: 'Do Not Reply', verb: 'must not reply to your messages.' },
+  undnr: { emoji: '✅', title: 'DNR Removed', verb: 'may reply to you again.' },
 };
 
 export interface ModEmbedOptions {
@@ -136,6 +140,7 @@ export function buildPurgeEmbed(opts: {
 export function buildModButtons(
   action: ModActionType,
   userId: string,
+  opts?: { protectorId?: string },
 ): ActionRowBuilder<ButtonBuilder> | null {
   if (action === 'purge') return null;
 
@@ -191,9 +196,34 @@ export function buildModButtons(
     );
   }
 
+  if (action === 'dnr' && opts?.protectorId) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`mod:undnr:${opts.protectorId}:${userId}`)
+        .setLabel('Undnr')
+        .setEmoji('✅')
+        .setStyle(ButtonStyle.Success),
+    );
+  }
+
+  if (action === 'undnr' && opts?.protectorId) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`mod:dnr:${opts.protectorId}:${userId}`)
+        .setLabel('DNR')
+        .setEmoji('🚫')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
+
+  const editId =
+    (action === 'dnr' || action === 'undnr') && opts?.protectorId
+      ? `mod:edit:${action}:${opts.protectorId}:${userId}`
+      : `mod:edit:${action}:${userId}`;
+
   row.addComponents(
     new ButtonBuilder()
-      .setCustomId(`mod:edit:${action}:${userId}`)
+      .setCustomId(editId)
       .setLabel('Edit Reason')
       .setEmoji('📝')
       .setStyle(ButtonStyle.Primary),
