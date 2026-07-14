@@ -9,6 +9,7 @@ import { fail } from '../../utils/embeds.js';
 import { buildPurgeEmbed } from '../../utils/modResponse.js';
 import { sendModLog } from '../../utils/moderation.js';
 import { sendPurgeMessageHistory, type PurgedMessageSnapshot } from '../../utils/log.js';
+import { PrefixCommandInteraction } from '../../utils/prefixInteraction.js';
 
 const MAX_AMOUNT = 1000;
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
@@ -24,20 +25,25 @@ function snapshotMessage(msg: Message): PurgedMessageSnapshot {
   };
 }
 
+/**
+ * Purge `amount` messages strictly older than `beforeMessageId`
+ * (so the invoke command / bot reply are not counted).
+ */
 async function purgeMessages(
   channel: TextChannel,
   amount: number,
+  beforeMessageId: string,
   targetUserId?: string,
 ): Promise<{ deleted: number; snapshots: PurgedMessageSnapshot[] }> {
   let deleted = 0;
-  let before: string | undefined;
+  let before: string | undefined = beforeMessageId;
   let emptyStreak = 0;
   const snapshots: PurgedMessageSnapshot[] = [];
 
   while (deleted < amount) {
-    const fetched = await channel.messages.fetch({
+    const fetched: import('discord.js').Collection<string, Message> = await channel.messages.fetch({
       limit: 100,
-      ...(before ? { before } : {}),
+      before,
     });
 
     if (!fetched.size) break;
@@ -64,7 +70,6 @@ async function purgeMessages(
     const older = candidates.filter((msg) => msg.createdTimestamp <= cutoff);
 
     if (recent.length) {
-      // Snapshot before bulk delete
       for (const msg of recent) snapshots.push(snapshotMessage(msg));
       const bulk = await channel.bulkDelete(recent, true);
       deleted += bulk.size;
@@ -81,9 +86,7 @@ async function purgeMessages(
     if (fetched.size < 100) break;
   }
 
-  // Chronological order (oldest → newest)
   snapshots.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
-
   return { deleted, snapshots };
 }
 
@@ -94,7 +97,7 @@ const command: Command = {
     .addIntegerOption((opt) =>
       opt
         .setName('amount')
-        .setDescription('Number of messages (1-1000)')
+        .setDescription('Number of messages (1-1000) before this command')
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(MAX_AMOUNT),
@@ -122,10 +125,28 @@ const command: Command = {
       return;
     }
 
+    const prefix = interaction instanceof PrefixCommandInteraction ? interaction : null;
+    // Cursor snowflake: start counting from messages older than the command (prefix)
+    // or older than the bot reply (slash). Command/reply are deleted separately and not counted.
+    const beforeMessageId = prefix?.commandMessage.id;
+
     await interaction.deferReply();
 
+    const reply = await interaction.fetchReply();
+    const cursorId = beforeMessageId ?? reply.id;
+
     try {
-      const { deleted, snapshots } = await purgeMessages(channel as TextChannel, amount, target?.id);
+      const { deleted, snapshots } = await purgeMessages(
+        channel as TextChannel,
+        amount,
+        cursorId,
+        target?.id,
+      );
+
+      // Cleanup: remove the user's ,purge message (not counted in amount)
+      if (prefix) {
+        await prefix.commandMessage.delete().catch(() => undefined);
+      }
 
       await sendModLog({
         guild: interaction.guild!,
@@ -136,7 +157,6 @@ const command: Command = {
         extra: { amount: deleted },
       });
 
-      // After the case summary, dump deleted messages in order
       await sendPurgeMessageHistory(interaction.guild!, snapshots, {
         moderator: interaction.user,
         channelMention: `${channel}`,

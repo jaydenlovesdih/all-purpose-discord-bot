@@ -285,6 +285,11 @@ export class PrefixCommandInteraction {
     return this._deferred;
   }
 
+  /** The prefix message that invoked the command (e.g. `,purge 50`) */
+  get commandMessage(): Message {
+    return this.message;
+  }
+
   async reply(payload: ReplyPayload & { fetchReply?: boolean; ephemeral?: boolean }): Promise<Message> {
     this._replied = true;
     const { fetchReply: _fetchReply, ephemeral: _ephemeral, ...rest } = payload as import('discord.js').InteractionReplyOptions;
@@ -305,6 +310,11 @@ export class PrefixCommandInteraction {
     this._replied = true;
     const sent = await this.message.reply({ content: 'Processing...' });
     this.replyMessage = sent;
+  }
+
+  async fetchReply(): Promise<Message> {
+    if (!this.replyMessage) throw new Error('No reply to fetch');
+    return this.replyMessage;
   }
 
   async deleteReply(): Promise<void> {

@@ -1,4 +1,4 @@
-import { ChannelType, EmbedBuilder, Guild, TextChannel, User } from 'discord.js';
+import { AttachmentBuilder, ChannelType, EmbedBuilder, Guild, TextChannel, User } from 'discord.js';
 import { getGuildConfig, LogChannels, mutateGuildConfig } from './guildConfig.js';
 import { Colors } from './embeds.js';
 
@@ -248,7 +248,7 @@ export interface PurgedMessageSnapshot {
   channelId: string;
 }
 
-/** After a purge case log, dump deleted messages chronologically in the purge channel */
+/** After a purge case log, attach deleted messages as a downloadable .txt */
 export async function sendPurgeMessageHistory(
   guild: Guild,
   snapshots: PurgedMessageSnapshot[],
@@ -266,26 +266,28 @@ export async function sendPurgeMessageHistory(
   if (!logChannel?.isTextBased() || !logChannel.isSendable()) return;
 
   const lines = snapshots.map((s, i) => {
-    const when = `<t:${Math.floor(s.createdTimestamp / 1000)}:T>`;
-    const body = (s.content || '*no text*').replace(/\n/g, ' ').slice(0, 180);
-    const files = s.attachments.length ? ` · 📎 ${s.attachments.length}` : '';
-    return `**${i + 1}.** ${when} · **${s.authorTag}**: ${body}${files}`;
+    const when = new Date(s.createdTimestamp).toISOString();
+    const body = s.content || '[no text content]';
+    const files = s.attachments.length
+      ? `\n  Attachments:\n${s.attachments.map((u) => `  - ${u}`).join('\n')}`
+      : '';
+    return `#${i + 1} | ${when} | ${s.authorTag} (${s.authorId})\n${body}${files}`;
   });
 
-  const chunks: string[][] = [];
-  let current: string[] = [];
-  let size = 0;
+  const header = [
+    'Blaze Purge Log',
+    `Channel: ${meta.channelMention}`,
+    `Moderator: ${meta.moderator.tag} (${meta.moderator.id})`,
+    `Messages: ${snapshots.length}`,
+    `Generated: ${new Date().toISOString()}`,
+    'Order: oldest → newest',
+    '─'.repeat(40),
+    '',
+  ].join('\n');
 
-  for (const line of lines) {
-    if (size + line.length + 1 > 3800 && current.length) {
-      chunks.push(current);
-      current = [];
-      size = 0;
-    }
-    current.push(line);
-    size += line.length + 1;
-  }
-  if (current.length) chunks.push(current);
+  const file = new AttachmentBuilder(Buffer.from(`${header}${lines.join('\n\n')}\n`, 'utf8'), {
+    name: `purge-${Date.now()}.txt`,
+  });
 
   await (logChannel as TextChannel)
     .send({
@@ -293,23 +295,14 @@ export async function sendPurgeMessageHistory(
         buildServerLogEmbed({
           emoji: '📜',
           title: 'Deleted Messages',
-          description: `Logging **${snapshots.length}** deleted message(s) in order (oldest → newest).`,
+          description: `**${snapshots.length}** deleted message(s) saved to the attached file (oldest → newest).`,
           moderator: meta.moderator,
           reason: 'Purge history',
           detail: { name: '#️⃣ Channel:', value: meta.channelMention },
           footer: `${snapshots.length} message(s)`,
         }),
       ],
+      files: [file],
     })
     .catch(() => undefined);
-
-  for (let i = 0; i < chunks.length; i++) {
-    const embed = new EmbedBuilder()
-      .setColor(Colors.success)
-      .setTitle(`📜 Purge History (${i + 1}/${chunks.length})`)
-      .setDescription(chunks[i].join('\n'))
-      .setTimestamp();
-
-    await (logChannel as TextChannel).send({ embeds: [embed] }).catch(() => undefined);
-  }
 }
