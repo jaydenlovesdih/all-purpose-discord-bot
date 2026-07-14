@@ -1,4 +1,5 @@
 import {
+  Message,
   PermissionFlagsBits,
   SlashCommandBuilder,
   TextChannel,
@@ -6,17 +7,32 @@ import {
 import { Command } from '../../types/index.js';
 import { fail } from '../../utils/embeds.js';
 import { buildPurgeEmbed } from '../../utils/modResponse.js';
-import { sendModLog } from '../../utils/moderation.js';const MAX_AMOUNT = 1000;
+import { sendModLog } from '../../utils/moderation.js';
+import { sendPurgeMessageHistory, type PurgedMessageSnapshot } from '../../utils/log.js';
+
+const MAX_AMOUNT = 1000;
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+
+function snapshotMessage(msg: Message): PurgedMessageSnapshot {
+  return {
+    authorId: msg.author.id,
+    authorTag: msg.author.tag,
+    content: msg.content || '',
+    createdTimestamp: msg.createdTimestamp,
+    attachments: [...msg.attachments.values()].map((a) => a.url),
+    channelId: msg.channel.id,
+  };
+}
 
 async function purgeMessages(
   channel: TextChannel,
   amount: number,
   targetUserId?: string,
-): Promise<number> {
+): Promise<{ deleted: number; snapshots: PurgedMessageSnapshot[] }> {
   let deleted = 0;
   let before: string | undefined;
   let emptyStreak = 0;
+  const snapshots: PurgedMessageSnapshot[] = [];
 
   while (deleted < amount) {
     const fetched = await channel.messages.fetch({
@@ -36,7 +52,6 @@ async function purgeMessages(
 
     if (!candidates.length) {
       emptyStreak += 1;
-      // Stop if we keep scrolling without finding that user's messages
       if (targetUserId && emptyStreak >= 20) break;
       continue;
     }
@@ -49,20 +64,27 @@ async function purgeMessages(
     const older = candidates.filter((msg) => msg.createdTimestamp <= cutoff);
 
     if (recent.length) {
+      // Snapshot before bulk delete
+      for (const msg of recent) snapshots.push(snapshotMessage(msg));
       const bulk = await channel.bulkDelete(recent, true);
       deleted += bulk.size;
     }
 
     for (const msg of older) {
       if (deleted >= amount) break;
+      snapshots.push(snapshotMessage(msg));
       const ok = await msg.delete().then(() => true).catch(() => false);
       if (ok) deleted += 1;
+      else snapshots.pop();
     }
 
     if (fetched.size < 100) break;
   }
 
-  return deleted;
+  // Chronological order (oldest → newest)
+  snapshots.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+  return { deleted, snapshots };
 }
 
 const command: Command = {
@@ -103,7 +125,8 @@ const command: Command = {
     await interaction.deferReply();
 
     try {
-      const deleted = await purgeMessages(channel as TextChannel, amount, target?.id);
+      const { deleted, snapshots } = await purgeMessages(channel as TextChannel, amount, target?.id);
+
       await sendModLog({
         guild: interaction.guild!,
         action: 'purge',
@@ -112,6 +135,13 @@ const command: Command = {
         reason: target ? `User purge (${target.tag})` : 'Bulk delete',
         extra: { amount: deleted },
       });
+
+      // After the case summary, dump deleted messages in order
+      await sendPurgeMessageHistory(interaction.guild!, snapshots, {
+        moderator: interaction.user,
+        channelMention: `${channel}`,
+      });
+
       await interaction.editReply({
         embeds: [
           buildPurgeEmbed({
