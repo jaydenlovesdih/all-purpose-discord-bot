@@ -9,11 +9,11 @@ export const BUILTIN_ALIASES: Record<string, string> = {
   sban: 'softban',
   hban: 'hardban',
   to: 'timeout',
+  c: 'purge',
   // antinuke / raids
   an: 'antinuke',
   antin: 'antinuke',
   // snipe
-  c: 'snipe',
   s: 'snipe',
   es: 'editsnipe',
   cs: 'clearsnipe',
