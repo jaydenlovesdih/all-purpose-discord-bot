@@ -320,7 +320,43 @@ export async function handleComponent(
         return true;
       }
 
-      const result = await applyRoleReaction(guild, pending.roleId, pending.userIds);
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.success)
+            .setTitle('🎭 Role Reaction')
+            .setDescription('Assigning roles… this can take a few minutes for large lists.')
+            .setTimestamp(),
+        ],
+        components: [],
+      });
+
+      const result = await applyRoleReaction(
+        guild,
+        pending.roleId,
+        pending.userIds,
+        async ({ processed, total, success, failed, skipped }) => {
+          await interaction.editReply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.success)
+                .setTitle('🎭 Role Reaction In Progress')
+                .setDescription(
+                  [
+                    `Assigning ${role}…`,
+                    '',
+                    `**Progress:** ${processed}/${total}`,
+                    `✅ Added so far: **${success}**`,
+                    `⏭️ Skipped: **${skipped}**`,
+                    `❌ Failed so far: **${failed}**`,
+                  ].join('\n'),
+                )
+                .setTimestamp(),
+            ],
+            components: [],
+          });
+        },
+      );
 
       await interaction.editReply({
         embeds: [
