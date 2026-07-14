@@ -47,12 +47,18 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'duration', type: 'string', required: true },
     { name: 'reason', type: 'rest' },
   ],
-  unmute: [{ name: 'user', type: 'user', required: true }],
+  unmute: [
+    { name: 'user', type: 'user', required: true },
+    { name: 'reason', type: 'rest' },
+  ],
   jail: [
     { name: 'user', type: 'user' },
     { name: 'reason', type: 'rest' },
   ],
-  unjail: [{ name: 'user', type: 'user', required: true }],
+  unjail: [
+    { name: 'user', type: 'user', required: true },
+    { name: 'reason', type: 'rest' },
+  ],
   strip: [
     { name: 'user', type: 'user', required: true },
     { name: 'reason', type: 'rest' },
@@ -63,10 +69,14 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'reason', type: 'rest', required: true },
   ],
   warnings: [{ name: 'user', type: 'user', required: true }],
-  clearwarnings: [{ name: 'user', type: 'user', required: true }],
   role: [
     { name: 'user', type: 'user', required: true },
     { name: 'role', type: 'role', required: true },
+    { name: 'reason', type: 'rest' },
+  ],
+  clearwarnings: [
+    { name: 'user', type: 'user', required: true },
+    { name: 'reason', type: 'rest' },
   ],
   filter: [
     { name: 'subcommand', type: 'string', required: true },

@@ -13,7 +13,7 @@ import { BotClient } from '../types/index.js';
 import { runCommand } from './commandRunner.js';
 import { getGuildConfig, mutateGuildConfig } from '../utils/guildConfig.js';
 import { canBypass } from '../utils/permissions.js';
-import { usageEmbed, ModActionType } from '../utils/modResponse.js';
+import { usageEmbed, ModActionType, buildModButtons, buildModEmbed } from '../utils/modResponse.js';
 import { ok, fail, Colors } from '../utils/embeds.js';
 import { PrefixCommandInteraction } from '../utils/prefixInteraction.js';
 import { getPrefix } from '../utils/setup.js';
@@ -212,17 +212,48 @@ export async function handleComponent(
     if (action === 'unban') {
       const userId = parts[2];
       try {
+        const user = await interaction.client.users.fetch(userId);
         await guild.members.unban(userId, `Unbanned by ${interaction.user.tag}`);
         mutateGuildConfig(guild.id, (c) => {
           c.hardbans = c.hardbans.filter((id) => id !== userId);
         });
+        const embed = buildModEmbed({
+          action: 'unban',
+          target: user,
+          moderator: interaction.user,
+          reason: `Unbanned by ${interaction.user.tag}`,
+          botName: interaction.client.user?.username,
+        });
+        const row = buildModButtons('unban', userId);
         await interaction.update({
-          content: '👍',
-          embeds: [ok(interaction.user, `unbanned <@${userId}>`)],
-          components: [],
+          embeds: [embed],
+          components: row ? [row] : [],
         });
       } catch {
         await interaction.reply({ embeds: [fail(interaction.user, 'Could not unban that user')], ephemeral: true });
+      }
+      return true;
+    }
+
+    if (action === 'ban') {
+      const userId = parts[2];
+      try {
+        const user = await interaction.client.users.fetch(userId);
+        await guild.members.ban(userId, { reason: `Banned by ${interaction.user.tag}` });
+        const embed = buildModEmbed({
+          action: 'ban',
+          target: user,
+          moderator: interaction.user,
+          reason: `Banned by ${interaction.user.tag}`,
+          botName: interaction.client.user?.username,
+        });
+        const row = buildModButtons('ban', userId);
+        await interaction.update({
+          embeds: [embed],
+          components: row ? [row] : [],
+        });
+      } catch {
+        await interaction.reply({ embeds: [fail(interaction.user, 'Could not ban that user')], ephemeral: true });
       }
       return true;
     }
@@ -235,10 +266,18 @@ export async function handleComponent(
         return true;
       }
       await member.timeout(null, `Unmuted by ${interaction.user.tag}`);
+      const embed = buildModEmbed({
+        action: 'unmute',
+        target: member.user,
+        moderator: interaction.user,
+        reason: `Unmuted by ${interaction.user.tag}`,
+        member,
+        botName: interaction.client.user?.username,
+      });
+      const row = buildModButtons('unmute', userId);
       await interaction.update({
-        content: '👍',
-        embeds: [ok(interaction.user, `unmuted ${member}`)],
-        components: [],
+        embeds: [embed],
+        components: row ? [row] : [],
       });
       return true;
     }
@@ -257,10 +296,18 @@ export async function handleComponent(
       mutateGuildConfig(guild.id, (c) => {
         delete c.jailedRoles[userId];
       });
+      const embed = buildModEmbed({
+        action: 'unjail',
+        target: member.user,
+        moderator: interaction.user,
+        reason: `Unjailed by ${interaction.user.tag}`,
+        member,
+        botName: interaction.client.user?.username,
+      });
+      const row = buildModButtons('unjail', userId);
       await interaction.update({
-        content: '👍',
-        embeds: [ok(interaction.user, `unjailed ${member}`)],
-        components: [],
+        embeds: [embed],
+        components: row ? [row] : [],
       });
       return true;
     }
@@ -289,10 +336,25 @@ export async function handleComponent(
       const userId = parts[2];
       const { clearWarnings } = await import('../utils/warnings.js');
       const count = clearWarnings(guild.id, userId);
+      const user = await interaction.client.users.fetch(userId).catch(() => null);
+      if (!user) {
+        await interaction.reply({ embeds: [fail(interaction.user, 'User not found')], ephemeral: true });
+        return true;
+      }
+      const member = await guild.members.fetch(userId).catch(() => null);
+      const embed = buildModEmbed({
+        action: 'clearwarnings',
+        target: user,
+        moderator: interaction.user,
+        reason: `Cleared by ${interaction.user.tag}`,
+        member,
+        extraLine: `Cleared **${count}** warning(s).`,
+        botName: interaction.client.user?.username,
+      });
+      const row = buildModButtons('clearwarnings', userId);
       await interaction.update({
-        content: '👍',
-        embeds: [ok(interaction.user, `cleared **${count}** warning(s) for <@${userId}>`)],
-        components: [],
+        embeds: [embed],
+        components: row ? [row] : [],
       });
       return true;
     }

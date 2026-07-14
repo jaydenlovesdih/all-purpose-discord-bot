@@ -8,11 +8,13 @@ const command: Command = {
   data: new SlashCommandBuilder()
     .setName('unmute')
     .setDescription('Remove timeout from a member')
-    .addUserOption((opt) => opt.setName('user').setDescription('Member to unmute').setRequired(true)),
+    .addUserOption((opt) => opt.setName('user').setDescription('Member to unmute').setRequired(true))
+    .addStringOption((opt) => opt.setName('reason').setDescription('Reason')),
   permissions: [PermissionFlagsBits.ModerateMembers],
   guildOnly: true,
   async execute(interaction) {
     const user = interaction.options.getUser('user', true);
+    const reason = interaction.options.getString('reason') ?? 'No reason provided';
     const member = interaction.guild!.members.cache.get(user.id);
 
     if (!member) {
@@ -25,9 +27,9 @@ const command: Command = {
       return;
     }
 
-    await member.timeout(null);
+    await member.timeout(null, reason);
     await sendInvoke(
-      { guild: interaction.guild!, action: 'untimeout', user, moderator: interaction.user, reason: 'Unmuted' },
+      { guild: interaction.guild!, action: 'untimeout', user, moderator: interaction.user, reason },
       null,
     );
 
@@ -35,7 +37,7 @@ const command: Command = {
       action: 'unmute',
       target: user,
       moderator: interaction.user,
-      reason: 'Unmuted',
+      reason,
       member,
       botName: interaction.client.user?.username,
     });

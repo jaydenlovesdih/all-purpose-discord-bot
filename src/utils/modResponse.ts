@@ -16,6 +16,7 @@ export type ModActionType =
   | 'ban'
   | 'softban'
   | 'hardban'
+  | 'unhardban'
   | 'kick'
   | 'mute'
   | 'timeout'
@@ -24,12 +25,17 @@ export type ModActionType =
   | 'jail'
   | 'unjail'
   | 'warn'
-  | 'strip';
+  | 'clearwarnings'
+  | 'strip'
+  | 'roleadd'
+  | 'roleremove'
+  | 'purge';
 
 const TITLES: Record<ModActionType, { emoji: string; title: string; verb: string }> = {
   ban: { emoji: '🔨', title: 'User Banned', verb: 'has been permanently banned.' },
   softban: { emoji: '🔨', title: 'User Softbanned', verb: 'has been softbanned.' },
   hardban: { emoji: '🔨', title: 'User Hardbanned', verb: 'has been hardbanned.' },
+  unhardban: { emoji: '🔓', title: 'Hardban Removed', verb: 'is no longer hardbanned.' },
   kick: { emoji: '👢', title: 'User Kicked', verb: 'has been kicked.' },
   mute: { emoji: '🔇', title: 'User Muted', verb: 'has been muted.' },
   timeout: { emoji: '⏱️', title: 'User Timed Out', verb: 'has been timed out.' },
@@ -38,7 +44,11 @@ const TITLES: Record<ModActionType, { emoji: string; title: string; verb: string
   jail: { emoji: '🔒', title: 'User Jailed', verb: 'has been jailed.' },
   unjail: { emoji: '🔓', title: 'User Unjailed', verb: 'has been released from jail.' },
   warn: { emoji: '⚠️', title: 'User Warned', verb: 'has been warned.' },
+  clearwarnings: { emoji: '🧹', title: 'Warnings Cleared', verb: 'had their warnings cleared.' },
   strip: { emoji: '🧹', title: 'Roles Stripped', verb: 'had their roles stripped.' },
+  roleadd: { emoji: '➕', title: 'Role Added', verb: 'received a role.' },
+  roleremove: { emoji: '➖', title: 'Role Removed', verb: 'had a role removed.' },
+  purge: { emoji: '🗑️', title: 'Messages Purged', verb: 'messages were deleted.' },
 };
 
 export interface ModEmbedOptions {
@@ -50,17 +60,28 @@ export interface ModEmbedOptions {
   extraLine?: string;
   method?: string;
   botName?: string;
+  /** Replaces Boosting row when set (e.g. role name / purge count) */
+  detail?: { name: string; value: string };
 }
 
 export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
   const meta = TITLES[opts.action];
-  const boosting = opts.member?.premiumSince ? '✅ Yes' : '❎ No';
   const method = opts.method ?? '🛡️ Staff Permission';
   const display = opts.target.username;
 
   const description = opts.extraLine
     ? `**${display}** ${meta.verb}\n${opts.extraLine}`
     : `**${display}** ${meta.verb}`;
+
+  const detail = opts.detail ?? {
+    name: '💎 Boosting:',
+    value:
+      opts.member == null
+        ? '❎ N/A'
+        : opts.member.premiumSince
+          ? '✅ Yes'
+          : '❎ No',
+  };
 
   return new EmbedBuilder()
     .setColor(Colors.success)
@@ -70,7 +91,7 @@ export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
     .addFields(
       { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: false },
       { name: '📝 Reason:', value: opts.reason || 'No reason provided', inline: false },
-      { name: '💎 Boosting:', value: boosting, inline: false },
+      { name: detail.name, value: detail.value, inline: false },
       { name: '⚙️ Method:', value: method, inline: false },
     )
     .setFooter({
@@ -79,7 +100,33 @@ export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
     .setTimestamp();
 }
 
-export function buildModButtons(action: ModActionType, userId: string): ActionRowBuilder<ButtonBuilder> | null {
+/** Purge has no user target — same layout with channel instead of thumbnail user */
+export function buildPurgeEmbed(opts: {
+  moderator: User;
+  amount: number;
+  channelMention: string;
+  botName?: string;
+}): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(Colors.success)
+    .setTitle('🗑️ Messages Purged')
+    .setDescription(`**${opts.amount}** message(s) have been deleted.`)
+    .addFields(
+      { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: false },
+      { name: '📝 Reason:', value: 'Bulk delete', inline: false },
+      { name: '#️⃣ Channel:', value: opts.channelMention, inline: false },
+      { name: '⚙️ Method:', value: '🛡️ Staff Permission', inline: false },
+    )
+    .setFooter({ text: opts.botName ?? 'Bot' })
+    .setTimestamp();
+}
+
+export function buildModButtons(
+  action: ModActionType,
+  userId: string,
+): ActionRowBuilder<ButtonBuilder> | null {
+  if (action === 'purge') return null;
+
   const row = new ActionRowBuilder<ButtonBuilder>();
 
   if (action === 'ban' || action === 'softban' || action === 'hardban') {
@@ -112,8 +159,24 @@ export function buildModButtons(action: ModActionType, userId: string): ActionRo
     );
   }
 
-  if (action === 'kick' || action === 'warn' || action === 'strip') {
-    // No reverse action that maps cleanly — still allow edit reason
+  if (action === 'warn') {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`mod:clearwarns:${userId}`)
+        .setLabel('Clear Warnings')
+        .setEmoji('🧹')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
+
+  if (action === 'unban') {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`mod:ban:${userId}`)
+        .setLabel('Ban')
+        .setEmoji('🔨')
+        .setStyle(ButtonStyle.Danger),
+    );
   }
 
   row.addComponents(

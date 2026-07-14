@@ -19,16 +19,39 @@ const command: Command = {
   guildOnly: true,
   async execute(interaction) {
     const user = interaction.options.getUser('user', true);
+    const member = interaction.guild!.members.cache.get(user.id) ?? null;
     const warnings = getWarnings(interaction.guildId!, user.id);
 
     if (!warnings.length) {
-      await interaction.reply({ content: `**${user.tag}** has no warnings.`, ephemeral: true });
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.error)
+            .setTitle('⚠️ Warnings')
+            .setDescription(`**${user.username}** has no warnings.`)
+            .addFields(
+              { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: false },
+              { name: '📝 Reason:', value: 'Lookup', inline: false },
+              {
+                name: '💎 Boosting:',
+                value: member?.premiumSince ? '✅ Yes' : member ? '❎ No' : '❎ N/A',
+                inline: false,
+              },
+              { name: '⚙️ Method:', value: '🛡️ Staff Permission', inline: false },
+            )
+            .setThumbnail(user.displayAvatarURL({ size: 256 }))
+            .setFooter({
+              text: `User ID: ${user.id} | ${interaction.client.user?.username ?? 'Bot'}`,
+            })
+            .setTimestamp(),
+        ],
+      });
       return;
     }
 
     const embed = new EmbedBuilder()
       .setColor(Colors.success)
-      .setTitle(`⚠️ Warnings for ${user.username}`)
+      .setTitle(`⚠️ Warnings — ${user.username}`)
       .setThumbnail(user.displayAvatarURL({ size: 256 }))
       .setDescription(
         warnings
@@ -40,10 +63,16 @@ const command: Command = {
       )
       .addFields(
         { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: false },
-        { name: '📝 Total:', value: String(warnings.length), inline: false },
+        { name: '📝 Reason:', value: 'Lookup', inline: false },
+        {
+          name: '💎 Boosting:',
+          value: member?.premiumSince ? '✅ Yes' : member ? '❎ No' : '❎ N/A',
+          inline: false,
+        },
+        { name: '⚙️ Method:', value: '🛡️ Staff Permission', inline: false },
       )
       .setFooter({
-        text: `User ID: ${user.id} | ${interaction.client.user?.username ?? 'Bot'}`,
+        text: `User ID: ${user.id} | ${warnings.length} warning(s) | ${interaction.client.user?.username ?? 'Bot'}`,
       })
       .setTimestamp();
 

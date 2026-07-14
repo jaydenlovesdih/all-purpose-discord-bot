@@ -1,6 +1,7 @@
 import { PermissionFlagsBits, SlashCommandBuilder, TextChannel } from 'discord.js';
 import { Command } from '../../types/index.js';
-import { successEmbed, errorEmbed } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
+import { buildPurgeEmbed } from '../../utils/modResponse.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -13,14 +14,32 @@ const command: Command = {
   guildOnly: true,
   async execute(interaction) {
     const amount = interaction.options.getInteger('amount', true);
-    const channel = interaction.channel as TextChannel;
+    const channel = interaction.channel;
+
+    if (!channel || !channel.isTextBased() || channel.isDMBased()) {
+      await interaction.reply({ embeds: [fail(interaction.user, 'Cannot purge here')], ephemeral: true });
+      return;
+    }
 
     await interaction.deferReply({ ephemeral: true });
 
-    const deleted = await channel.bulkDelete(amount, true);
-    await interaction.editReply({
-      embeds: [successEmbed(`Deleted **${deleted.size}** message(s).`)],
-    });
+    try {
+      const deleted = await (channel as TextChannel).bulkDelete(amount, true);
+      await interaction.editReply({
+        embeds: [
+          buildPurgeEmbed({
+            moderator: interaction.user,
+            amount: deleted.size,
+            channelMention: `${channel}`,
+            botName: interaction.client.user?.username,
+          }),
+        ],
+      });
+    } catch {
+      await interaction.editReply({
+        embeds: [fail(interaction.user, 'Could not delete messages (must be under 14 days old)')],
+      });
+    }
   },
 };
 

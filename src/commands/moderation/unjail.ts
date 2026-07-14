@@ -9,11 +9,13 @@ const command: Command = {
   data: new SlashCommandBuilder()
     .setName('unjail')
     .setDescription('Release a member from jail')
-    .addUserOption((opt) => opt.setName('user').setDescription('Member').setRequired(true)),
+    .addUserOption((opt) => opt.setName('user').setDescription('Member').setRequired(true))
+    .addStringOption((opt) => opt.setName('reason').setDescription('Reason')),
   permissions: [PermissionFlagsBits.ModerateMembers],
   guildOnly: true,
   async execute(interaction) {
     const user = interaction.options.getUser('user', true);
+    const reason = interaction.options.getString('reason') ?? 'No reason provided';
     const member = interaction.guild!.members.cache.get(user.id);
     const cfg = getGuildConfig(interaction.guildId!);
 
@@ -26,7 +28,7 @@ const command: Command = {
     }
 
     const previous = cfg.jailedRoles[user.id] ?? [];
-    await member.roles.remove(cfg.jailRoleId, 'Unjail');
+    await member.roles.remove(cfg.jailRoleId, reason);
     if (previous.length) {
       await member.roles.add(previous).catch(() => undefined);
     }
@@ -35,7 +37,7 @@ const command: Command = {
     });
 
     await sendInvoke(
-      { guild: interaction.guild!, action: 'unjail', user, moderator: interaction.user, reason: 'Unjailed' },
+      { guild: interaction.guild!, action: 'unjail', user, moderator: interaction.user, reason },
       null,
     );
 
@@ -43,7 +45,7 @@ const command: Command = {
       action: 'unjail',
       target: user,
       moderator: interaction.user,
-      reason: 'Unjailed',
+      reason,
       member,
       botName: interaction.client.user?.username,
     });
