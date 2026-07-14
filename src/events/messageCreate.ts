@@ -17,23 +17,8 @@ import {
 } from '../utils/prefixInteraction.js';
 import { prefixSchemas } from '../utils/prefixSchemas.js';
 import { getPrefix } from '../utils/setup.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';const BUILTIN_ALIASES: Record<string, string> = {
-  timeout: 'timeout',
-  to: 'timeout',
-  mute: 'mute',
-  q: 'ban',
-  sban: 'softban',
-  hban: 'hardban',
-  i: 'userinfo',
-  ui: 'userinfo',
-  si: 'serverinfo',
-  av: 'avatar',
-  gw: 'giveaway',
-  ar: 'autoresponder',
-  fp: 'fakepermissions',
-  fakeperms: 'fakepermissions',
-  an: 'antinuke',
-};
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { BUILTIN_ALIASES, resolveAlias } from '../utils/aliases.js';
 
 export default {
   name: Events.MessageCreate,
@@ -111,10 +96,7 @@ export default {
     const parsed = parsePrefixMessage(message.content, prefix);
     if (!parsed) return;
 
-    const resolved =
-      BUILTIN_ALIASES[parsed.command] ??
-      guildCfg.aliases[parsed.command] ??
-      parsed.command;
+    const resolved = resolveAlias(parsed.command, guildCfg.aliases);
 
     const allNames = [
       ...client.commands.keys(),
@@ -126,7 +108,7 @@ export default {
     let command = client.commands.get(resolved);
     if (!command) {
       const suggestions = suggestCommands(parsed.command, uniqueNames)
-        .map((name) => BUILTIN_ALIASES[name] ?? guildCfg.aliases[name] ?? name)
+        .map((name) => resolveAlias(name, guildCfg.aliases))
         .filter((name, index, arr) => client.commands.has(name) && arr.indexOf(name) === index)
         .slice(0, 5);
 
@@ -149,6 +131,7 @@ export default {
       return;
     }
 
+    // Prefer the resolved command schema so aliases keep full subcommand support
     const schema = prefixSchemas[resolved] ?? prefixSchemas[parsed.command];
     if (schema === undefined) return;
 

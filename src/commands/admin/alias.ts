@@ -58,8 +58,13 @@ const command: Command = {
     mutateGuildConfig(guildId, (c) => {
       c.aliases[alias] = target;
     });
-    await interaction.reply({ embeds: [successEmbed(`Alias \`${alias}\` → \`${target}\``)] });
+    await interaction.reply({
+      embeds: [
+        successEmbed(
+          `Alias \`${alias}\` → \`${target}\`\nSubcommands work too: \`${alias} …\` runs as \`${target} …\``,
+        ),
+      ],
+    });
   },
 };
-
 export default command;

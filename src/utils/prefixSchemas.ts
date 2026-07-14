@@ -1,3 +1,5 @@
+import { BUILTIN_ALIASES } from './aliases.js';
+
 export type PrefixArgType = 'user' | 'role' | 'channel' | 'integer' | 'string' | 'rest';
 
 export interface PrefixArgDef {
@@ -153,3 +155,10 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   '8ball': [{ name: 'question', type: 'rest', required: true }],
   eval: [{ name: 'code', type: 'rest', required: true }],
 };
+
+// Alias names share the same arg schema so `,an toggle` parses like `,antinuke toggle`
+for (const [alias, target] of Object.entries(BUILTIN_ALIASES)) {
+  if (prefixSchemas[target] !== undefined && prefixSchemas[alias] === undefined) {
+    prefixSchemas[alias] = prefixSchemas[target];
+  }
+}
