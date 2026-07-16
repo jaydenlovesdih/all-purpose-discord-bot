@@ -31,6 +31,7 @@ const EXAMPLES: Record<string, string> = {
   invoke: 'set ban {user.mention} was banned',
   prefix: '!',
   rolereaction: '@mog-winner',
+  nuke: '#general',
   snipe: '1',
   editsnipe: '1',
   afk: 'brb food',

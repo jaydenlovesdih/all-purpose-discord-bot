@@ -31,6 +31,7 @@ export const BUILTIN_ALIASES: Record<string, string> = {
   ar: 'autoresponder',
   fp: 'fakepermissions',
   fakeperms: 'fakepermissions',
+  n: 'nuke',
 };
 
 export function resolveAlias(
