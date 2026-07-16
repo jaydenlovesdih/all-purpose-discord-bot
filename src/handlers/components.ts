@@ -36,6 +36,11 @@ import {
   applyRoleReaction,
   pendingRoleReactions,
 } from '../utils/rolereaction.js';
+import {
+  buildNukeDoneEmbed,
+  executeNuke,
+  pendingNukes,
+} from '../utils/nuke.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -379,6 +384,167 @@ export async function handleComponent(
         ],
         components: [],
       });
+      return true;
+    }
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('nuke:')) {
+    if (!interaction.inGuild()) return true;
+
+    const pending = pendingNukes.get(interaction.message.id);
+    if (!pending) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'This nuke confirmation expired — run the command again')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (!canBypass(interaction.user.id) || interaction.user.id !== pending.ownerId) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the bot owner who ran this command can use these buttons')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'nuke:cancel') {
+      pending.cancelled = true;
+      if (pending.timer) clearInterval(pending.timer as ReturnType<typeof setInterval>);
+      pendingNukes.delete(interaction.message.id);
+
+      await interaction.update({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.error)
+            .setTitle('💣 Nuke Cancelled')
+            .setDescription(`Cancelled — **#${pending.channelName}** was not nuked.`),
+        ],
+        components: [],
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'nuke:confirm') {
+      if (pending.timer) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Countdown already started')],
+          ephemeral: true,
+        });
+        return true;
+      }
+
+      let secondsLeft = 3;
+
+      const countdownEmbed = (secs: number) =>
+        new EmbedBuilder()
+          .setColor(Colors.error)
+          .setTitle('💣 Nuking in…')
+          .setDescription(
+            [
+              `Channel: <#${pending.channelId}> (\`#${pending.channelName}\`)`,
+              '',
+              `**${secs}** second${secs === 1 ? '' : 's'} remaining`,
+              '',
+              'Press **Cancel** to abort.',
+            ].join('\n'),
+          )
+          .setTimestamp();
+
+      const cancelRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId('nuke:cancel')
+          .setLabel('Cancel')
+          .setEmoji('❌')
+          .setStyle(ButtonStyle.Secondary),
+      );
+
+      await interaction.update({
+        embeds: [countdownEmbed(secondsLeft)],
+        components: [cancelRow],
+      });
+
+      const messageId = interaction.message.id;
+      const guild = interaction.guild!;
+
+      pending.timer = setInterval(async () => {
+        const state = pendingNukes.get(messageId);
+        if (!state || state.cancelled) {
+          if (state?.timer) clearInterval(state.timer as ReturnType<typeof setInterval>);
+          pendingNukes.delete(messageId);
+          return;
+        }
+
+        secondsLeft -= 1;
+
+        if (secondsLeft > 0) {
+          await interaction.message
+            .edit({
+              embeds: [countdownEmbed(secondsLeft)],
+              components: [cancelRow],
+            })
+            .catch(() => undefined);
+          return;
+        }
+
+        clearInterval(state.timer as ReturnType<typeof setInterval>);
+        pendingNukes.delete(messageId);
+
+        if (state.cancelled) return;
+
+        await interaction.message
+          .edit({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.error)
+                .setTitle('💣 Nuking…')
+                .setDescription(`Deleting and recreating **#${state.channelName}**…`),
+            ],
+            components: [],
+          })
+          .catch(() => undefined);
+
+        try {
+          const result = await executeNuke(guild, state.channelId, interaction.user);
+          if ('error' in result) {
+            await interaction.message
+              .edit({
+                embeds: [fail(interaction.user, result.error)],
+                components: [],
+              })
+              .catch(() => undefined);
+            return;
+          }
+
+          const done = buildNukeDoneEmbed(
+            result.name,
+            result.parentId,
+            result.overwriteCount,
+            interaction.user,
+          );
+
+          if (result.channel.isTextBased() && result.channel.isSendable()) {
+            await result.channel.send({ embeds: [done] }).catch(() => undefined);
+          }
+
+          // Original confirm message dies with the channel if nuking current channel
+          await interaction.message
+            .edit({
+              embeds: [ok(interaction.user, `nuked and recreated <#${result.channel.id}>`)],
+              components: [],
+            })
+            .catch(() => undefined);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          await interaction.message
+            .edit({
+              embeds: [fail(interaction.user, `Nuke failed: ${msg}`)],
+              components: [],
+            })
+            .catch(() => undefined);
+        }
+      }, 1000);
+
       return true;
     }
   }
