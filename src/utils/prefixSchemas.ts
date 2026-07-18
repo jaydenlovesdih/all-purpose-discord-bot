@@ -138,6 +138,7 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   prefix: [{ name: 'new_prefix', type: 'string' }],
   rolereaction: [{ name: 'role', type: 'role', required: true }],
   nuke: [{ name: 'channel', type: 'channel' }],
+  botlock: [],
   snipe: [{ name: 'index', type: 'integer' }],
   editsnipe: [{ name: 'index', type: 'integer' }],
   afk: [{ name: 'reason', type: 'rest' }],

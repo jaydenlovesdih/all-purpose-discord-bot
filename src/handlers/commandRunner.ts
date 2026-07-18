@@ -7,6 +7,8 @@ import { usageEmbed } from '../utils/modResponse.js';
 import { buildUsageLine } from '../utils/usage.js';
 import { asSlashInteraction, PrefixCommandInteraction } from '../utils/prefixInteraction.js';
 import { getPrefix } from '../utils/setup.js';
+import { getGuildConfig } from '../utils/guildConfig.js';
+import { isOwner } from '../utils/permissions.js';
 
 type CommandInteractionLike = ChatInputCommandInteraction | PrefixCommandInteraction;
 
@@ -28,6 +30,12 @@ export async function runCommand(
 ): Promise<void> {
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
+
+  // Silent lock for non-owners (slash path; prefix is also gated in messageCreate)
+  if (interaction.guildId) {
+    const locked = getGuildConfig(interaction.guildId).botLocked;
+    if (locked && !isOwner(interaction.user.id)) return;
+  }
 
   const prefix = getPrefix(interaction.guildId, config.prefix);
 

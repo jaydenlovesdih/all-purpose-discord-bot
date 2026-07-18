@@ -20,6 +20,7 @@ import { getPrefix } from '../utils/setup.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { BUILTIN_ALIASES, resolveAlias } from '../utils/aliases.js';
 import { enforceDnr } from '../utils/dnr.js';
+import { isOwner } from '../utils/permissions.js';
 
 export default {
   name: Events.MessageCreate,
@@ -89,6 +90,9 @@ export default {
     const prefix = getPrefix(message.guild.id, config.prefix);
     const parsed = parsePrefixMessage(message.content, prefix);
     if (!parsed) return;
+
+    // Server bot lock: non-owners get total silence (no replies, no "unknown command")
+    if (guildCfg.botLocked && !isOwner(message.author.id)) return;
 
     const resolved = resolveAlias(parsed.command, guildCfg.aliases);
 

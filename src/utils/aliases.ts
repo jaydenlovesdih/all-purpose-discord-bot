@@ -32,6 +32,8 @@ export const BUILTIN_ALIASES: Record<string, string> = {
   fp: 'fakepermissions',
   fakeperms: 'fakepermissions',
   n: 'nuke',
+  bl: 'botlock',
+  serverlock: 'botlock',
 };
 
 export function resolveAlias(

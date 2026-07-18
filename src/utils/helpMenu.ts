@@ -60,6 +60,7 @@ const ADMIN_CMDS = new Set([
   'logging',
   'rolereaction',
   'nuke',
+  'botlock',
 ]);
 
 const INFO_CMDS = new Set(['help', 'ping', 'botinfo', 'avatar', 'userinfo', 'serverinfo', 'roles']);

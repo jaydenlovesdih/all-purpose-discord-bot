@@ -185,6 +185,11 @@ export interface GuildConfig {
   starboard: StarboardConfig;
   tickets: TicketsConfig;
   logging: LoggingConfig;
+  /**
+   * When true, ignore all commands from non-owners (complete silence).
+   * Defaults to locked so only bot owners can use commands until unlocked.
+   */
+  botLocked: boolean;
   aliases: Record<string, string>;
   autoresponders: AutoresponderEntry[];
   fakePermissions: Record<string, string[]>;
@@ -338,6 +343,7 @@ function defaults(): GuildConfig {
     tickets: { ...DEFAULT_TICKETS, open: {}, supportRoleIds: [] },
     logging: { ...DEFAULT_LOGGING, events: { ...DEFAULT_LOGGING.events } },
     logChannels: {},
+    botLocked: true,
     aliases: {},
     autoresponders: [],
     fakePermissions: {},
