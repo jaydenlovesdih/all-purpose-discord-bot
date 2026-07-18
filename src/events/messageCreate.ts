@@ -30,16 +30,6 @@ export default {
 
     if (!isTextCommandChannel(message.channel)) return;
 
-    if (client.user && message.mentions.has(client.user) && !message.mentions.everyone) {
-      const onlyMention =
-        message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim().length === 0;
-      if (onlyMention) {
-        const prefix = getPrefix(message.guild.id, config.prefix);
-        await message.reply(`Prefix: \`${prefix}\` · Try \`${prefix}help\` or \`${prefix}setup\``);
-        return;
-      }
-    }
-
     const guildCfg = getGuildConfig(message.guild.id);
 
     if (guildCfg.afk[message.author.id]) {
