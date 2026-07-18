@@ -15,6 +15,16 @@ export default {
     console.log(`Serving ${client.guilds.cache.size} guild(s)`);
     console.log(`Owner bypass IDs: ${config.ownerIds.join(', ')}`);
 
-    client.user.setActivity(`${config.prefix}help`, { type: ActivityType.Watching });
+    // Custom status (no Watching/Playing label) — shows as "discord.gg/mogs"
+    client.user.setPresence({
+      status: 'online',
+      activities: [
+        {
+          type: ActivityType.Custom,
+          name: 'Custom Status',
+          state: 'discord.gg/mogs',
+        },
+      ],
+    });
   },
 };
