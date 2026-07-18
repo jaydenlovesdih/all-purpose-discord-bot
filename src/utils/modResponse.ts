@@ -67,7 +67,7 @@ export interface ModEmbedOptions {
   extraLine?: string;
   method?: string;
   botName?: string;
-  /** Replaces Boosting row when set (e.g. role name / purge count) */
+  /** Optional third field (e.g. role name / duration) */
   detail?: { name: string; value: string };
 }
 
@@ -79,26 +79,21 @@ export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
     ? `**${display}** ${meta.verb}\n${opts.extraLine}`
     : `**${display}** ${meta.verb}`;
 
-  const detail = opts.detail ?? {
-    name: '💎 Boosting:',
-    value:
-      opts.member == null
-        ? '❎ N/A'
-        : opts.member.premiumSince
-          ? '✅ Yes'
-          : '❎ No',
-  };
+  const fields = [
+    { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: true },
+    { name: '📝 Reason:', value: opts.reason || 'No reason provided', inline: true },
+  ];
+
+  if (opts.detail) {
+    fields.push({ name: opts.detail.name, value: opts.detail.value, inline: true });
+  }
 
   return new EmbedBuilder()
     .setColor(Colors.success)
     .setTitle(`${meta.emoji} ${meta.title}`)
     .setDescription(description)
     .setThumbnail(opts.target.displayAvatarURL({ size: 256 }))
-    .addFields(
-      { name: '🛡️ Moderator:', value: `${opts.moderator}`, inline: true },
-      { name: '📝 Reason:', value: opts.reason || 'No reason provided', inline: true },
-      { name: detail.name, value: detail.value, inline: true },
-    )
+    .addFields(fields)
     .setFooter({
       text: `User ID: ${opts.target.id} | ${opts.botName ?? 'Bot'}`,
     })

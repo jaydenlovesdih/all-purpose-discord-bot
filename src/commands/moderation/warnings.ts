@@ -9,6 +9,7 @@ import {
 import { Command } from '../../types/index.js';
 import { getWarnings } from '../../utils/warnings.js';
 import { Colors } from '../../utils/embeds.js';
+import { blackBolt, buttonEmoji } from '../../utils/emojis.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -19,7 +20,6 @@ const command: Command = {
   guildOnly: true,
   async execute(interaction) {
     const user = interaction.options.getUser('user', true);
-    const member = interaction.guild!.members.cache.get(user.id) ?? null;
     const warnings = getWarnings(interaction.guildId!, user.id);
 
     if (!warnings.length) {
@@ -27,16 +27,11 @@ const command: Command = {
         embeds: [
           new EmbedBuilder()
             .setColor(Colors.error)
-            .setTitle('⚠️ Warnings')
+            .setTitle(`${blackBolt()} Warnings`)
             .setDescription(`**${user.username}** has no warnings.`)
             .addFields(
               { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: true },
               { name: '📝 Reason:', value: 'Lookup', inline: true },
-              {
-                name: '💎 Boosting:',
-                value: member?.premiumSince ? '✅ Yes' : member ? '❎ No' : '❎ N/A',
-                inline: true,
-              },
             )
             .setThumbnail(user.displayAvatarURL({ size: 256 }))
             .setFooter({
@@ -50,7 +45,7 @@ const command: Command = {
 
     const embed = new EmbedBuilder()
       .setColor(Colors.success)
-      .setTitle(`⚠️ Warnings — ${user.username}`)
+      .setTitle(`${blackBolt()} Warnings — ${user.username}`)
       .setThumbnail(user.displayAvatarURL({ size: 256 }))
       .setDescription(
         warnings
@@ -63,11 +58,6 @@ const command: Command = {
       .addFields(
         { name: '🛡️ Moderator:', value: `${interaction.user}`, inline: true },
         { name: '📝 Reason:', value: 'Lookup', inline: true },
-        {
-          name: '💎 Boosting:',
-          value: member?.premiumSince ? '✅ Yes' : member ? '❎ No' : '❎ N/A',
-          inline: true,
-        },
       )
       .setFooter({
         text: `User ID: ${user.id} | ${warnings.length} warning(s) | ${interaction.client.user?.username ?? 'Bot'}`,
@@ -78,7 +68,7 @@ const command: Command = {
       new ButtonBuilder()
         .setCustomId(`mod:clearwarns:${user.id}`)
         .setLabel('Clear Warnings')
-        .setEmoji('🧹')
+        .setEmoji(buttonEmoji('blackbolt'))
         .setStyle(ButtonStyle.Danger),
     );
 
