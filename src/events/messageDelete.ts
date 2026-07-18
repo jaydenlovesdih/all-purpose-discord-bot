@@ -2,15 +2,24 @@ import { Events } from 'discord.js';
 import { BotClient } from '../types/index.js';
 import { pushDeleteSnipe } from '../utils/snipeStore.js';
 import { sendLog } from '../utils/log.js';
+import { blackBolt } from '../utils/emojis.js';
 
 export default {
   name: Events.MessageDelete,
-  async execute(message: import('discord.js').Message | import('discord.js').PartialMessage, _client: BotClient) {
-    pushDeleteSnipe(message);
-    if (!message.guild || message.author?.bot) return;
+  async execute(
+    message: import('discord.js').Message | import('discord.js').PartialMessage,
+    _client: BotClient,
+  ) {
+    let full = message;
+    if (message.partial) {
+      full = await message.fetch().catch(() => message);
+    }
 
-    const when = message.createdAt
-      ? message.createdAt.toLocaleString('en-US', {
+    pushDeleteSnipe(full);
+    if (!full.guild || full.author?.bot) return;
+
+    const when = full.createdAt
+      ? full.createdAt.toLocaleString('en-US', {
           month: 'long',
           day: 'numeric',
           year: 'numeric',
@@ -20,20 +29,20 @@ export default {
       : 'unknown time';
 
     await sendLog(
-      message.guild,
+      full.guild,
       'messageDelete',
       'Message Deleted',
-      `**${message.author?.username ?? 'Unknown'}**'s message was deleted.`,
+      `**${full.author?.username ?? 'Unknown'}**'s message was deleted.`,
       undefined,
       {
-        emoji: '🗑️',
+        emoji: blackBolt(),
         reason: 'Message deleted',
         moderator: 'Unknown / Self',
-        detail: { name: '#️⃣ Channel:', value: `<#${message.channel.id}>` },
-        target: message.author ?? null,
-        content: message.content || undefined,
+        detail: { name: '#️⃣ Channel:', value: `<#${full.channel.id}>` },
+        target: full.author ?? null,
+        content: full.content || undefined,
         contentLabel: '📄 Content:',
-        footer: `User ID: ${message.author?.id ?? 'unknown'} · Sent ${when}`,
+        footer: `User ID: ${full.author?.id ?? 'unknown'} · Sent ${when}`,
       },
     );
   },

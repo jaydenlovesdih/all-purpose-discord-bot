@@ -12,7 +12,12 @@ const command: Command = {
   guildOnly: true,
   async execute(interaction) {
     const index = interaction.options.getInteger('index') ?? 1;
-    const entry = getDeleteSnipe(interaction.channelId, index);
+    const channelId = interaction.channelId ?? interaction.channel?.id;
+    if (!channelId) {
+      await interaction.reply({ embeds: [errorEmbed('No channel to snipe from.')], ephemeral: true });
+      return;
+    }
+    const entry = getDeleteSnipe(channelId, index);
     if (!entry) {
       await interaction.reply({ embeds: [errorEmbed('Nothing to snipe.')], ephemeral: true });
       return;

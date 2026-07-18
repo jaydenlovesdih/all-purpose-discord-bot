@@ -24,11 +24,13 @@ const edited = new Map<string, EditSnipeEntry[]>();
 const MAX = 20;
 
 export function pushDeleteSnipe(message: Message | PartialMessage): void {
-  if (!message.guild || !message.channel || message.author?.bot) return;
-  const channelId = message.channel.id;
+  if (!message.guild || !message.channelId) return;
+  if (message.author?.bot) return;
+
+  const channelId = message.channelId;
   const list = deleted.get(channelId) ?? [];
   list.unshift({
-    content: message.content || '*No content*',
+    content: message.content || (message.attachments?.size ? '*Attachment only*' : '*No content*'),
     authorTag: message.author?.tag ?? 'Unknown',
     authorId: message.author?.id ?? '0',
     authorAvatar: message.author?.displayAvatarURL(),
@@ -40,9 +42,9 @@ export function pushDeleteSnipe(message: Message | PartialMessage): void {
 }
 
 export function pushEditSnipe(before: Message | PartialMessage, after: Message | PartialMessage): void {
-  if (!before.guild || !before.channel || before.author?.bot) return;
+  if (!before.guild || !before.channelId || before.author?.bot) return;
   if ((before.content ?? '') === (after.content ?? '')) return;
-  const channelId = before.channel.id;
+  const channelId = before.channelId;
   const list = edited.get(channelId) ?? [];
   list.unshift({
     before: before.content || '*No content*',

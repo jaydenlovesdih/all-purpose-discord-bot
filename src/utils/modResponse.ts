@@ -8,6 +8,7 @@ import {
 } from 'discord.js';
 import { Colors } from './embeds.js';
 import { buildUsageExample, buildUsageLine } from './usage.js';
+import { blackBolt, bolt, buttonEmoji } from './emojis.js';
 
 /** @deprecated prefer Colors.success / Colors.error */
 export const MOD_ACCENT = Colors.success;
@@ -33,27 +34,29 @@ export type ModActionType =
   | 'dnr'
   | 'undnr';
 
-const TITLES: Record<ModActionType, { emoji: string; title: string; verb: string }> = {
-  ban: { emoji: '🔨', title: 'User Banned', verb: 'has been permanently banned.' },
-  softban: { emoji: '🔨', title: 'User Softbanned', verb: 'has been softbanned.' },
-  hardban: { emoji: '🔨', title: 'User Hardbanned', verb: 'has been hardbanned.' },
-  unhardban: { emoji: '🔓', title: 'Hardban Removed', verb: 'is no longer hardbanned.' },
-  kick: { emoji: '👢', title: 'User Kicked', verb: 'has been kicked.' },
-  mute: { emoji: '🔇', title: 'User Muted', verb: 'has been muted.' },
-  timeout: { emoji: '⏱️', title: 'User Timed Out', verb: 'has been timed out.' },
-  unmute: { emoji: '🔊', title: 'User Unmuted', verb: 'has been unmuted.' },
-  unban: { emoji: '🔓', title: 'User Unbanned', verb: 'has been unbanned.' },
-  jail: { emoji: '🔒', title: 'User Jailed', verb: 'has been jailed.' },
-  unjail: { emoji: '🔓', title: 'User Unjailed', verb: 'has been released from jail.' },
-  warn: { emoji: '⚠️', title: 'User Warned', verb: 'has been warned.' },
-  clearwarnings: { emoji: '🧹', title: 'Warnings Cleared', verb: 'had their warnings cleared.' },
-  strip: { emoji: '🧹', title: 'Roles Stripped', verb: 'had their roles stripped.' },
-  roleadd: { emoji: '➕', title: 'Role Added', verb: 'received a role.' },
-  roleremove: { emoji: '➖', title: 'Role Removed', verb: 'had a role removed.' },
-  purge: { emoji: '🗑️', title: 'Messages Purged', verb: 'messages were deleted.' },
-  dnr: { emoji: '🚫', title: 'Do Not Reply', verb: 'must not reply to your messages.' },
-  undnr: { emoji: '✅', title: 'DNR Removed', verb: 'may reply to you again.' },
-};
+function titles(): Record<ModActionType, { emoji: string; title: string; verb: string }> {
+  return {
+    ban: { emoji: bolt(), title: 'User Banned', verb: 'has been permanently banned.' },
+    softban: { emoji: bolt(), title: 'User Softbanned', verb: 'has been softbanned.' },
+    hardban: { emoji: blackBolt(), title: 'User Hardbanned', verb: 'has been hardbanned.' },
+    unhardban: { emoji: bolt(), title: 'Hardban Removed', verb: 'is no longer hardbanned.' },
+    kick: { emoji: bolt(), title: 'User Kicked', verb: 'has been kicked.' },
+    mute: { emoji: blackBolt(), title: 'User Muted', verb: 'has been muted.' },
+    timeout: { emoji: blackBolt(), title: 'User Timed Out', verb: 'has been timed out.' },
+    unmute: { emoji: bolt(), title: 'User Unmuted', verb: 'has been unmuted.' },
+    unban: { emoji: bolt(), title: 'User Unbanned', verb: 'has been unbanned.' },
+    jail: { emoji: blackBolt(), title: 'User Jailed', verb: 'has been jailed.' },
+    unjail: { emoji: bolt(), title: 'User Unjailed', verb: 'has been released from jail.' },
+    warn: { emoji: bolt(), title: 'User Warned', verb: 'has been warned.' },
+    clearwarnings: { emoji: bolt(), title: 'Warnings Cleared', verb: 'had their warnings cleared.' },
+    strip: { emoji: blackBolt(), title: 'Roles Stripped', verb: 'had their roles stripped.' },
+    roleadd: { emoji: bolt(), title: 'Role Added', verb: 'received a role.' },
+    roleremove: { emoji: blackBolt(), title: 'Role Removed', verb: 'had a role removed.' },
+    purge: { emoji: blackBolt(), title: 'Messages Purged', verb: 'messages were deleted.' },
+    dnr: { emoji: blackBolt(), title: 'Do Not Reply', verb: 'must not reply to your messages.' },
+    undnr: { emoji: bolt(), title: 'DNR Removed', verb: 'may reply to you again.' },
+  };
+}
 
 export interface ModEmbedOptions {
   action: ModActionType;
@@ -69,7 +72,7 @@ export interface ModEmbedOptions {
 }
 
 export function buildModEmbed(opts: ModEmbedOptions): EmbedBuilder {
-  const meta = TITLES[opts.action];
+  const meta = titles()[opts.action];
   const display = opts.target.username;
 
   const description = opts.extraLine
@@ -112,7 +115,7 @@ export function buildPurgeEmbed(opts: {
 }): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setColor(Colors.success)
-    .setTitle('🗑️ Messages Purged')
+    .setTitle(`${blackBolt()} Messages Purged`)
     .setDescription(
       opts.target
         ? `Deleted **${opts.amount}** message(s) from **${opts.target.username}**.`
@@ -151,7 +154,7 @@ export function buildModButtons(
       new ButtonBuilder()
         .setCustomId(`mod:unban:${userId}`)
         .setLabel('Unban')
-        .setEmoji('🔓')
+        .setEmoji(buttonEmoji('animatedbolt'))
         .setStyle(ButtonStyle.Success),
     );
   }
@@ -161,7 +164,7 @@ export function buildModButtons(
       new ButtonBuilder()
         .setCustomId(`mod:unmute:${userId}`)
         .setLabel('Unmute')
-        .setEmoji('🔊')
+        .setEmoji(buttonEmoji('animatedbolt'))
         .setStyle(ButtonStyle.Success),
     );
   }
@@ -171,7 +174,7 @@ export function buildModButtons(
       new ButtonBuilder()
         .setCustomId(`mod:unjail:${userId}`)
         .setLabel('Unjail')
-        .setEmoji('🔓')
+        .setEmoji(buttonEmoji('animatedbolt'))
         .setStyle(ButtonStyle.Success),
     );
   }
@@ -181,7 +184,7 @@ export function buildModButtons(
       new ButtonBuilder()
         .setCustomId(`mod:clearwarns:${userId}`)
         .setLabel('Clear Warnings')
-        .setEmoji('🧹')
+        .setEmoji(buttonEmoji('blackbolt'))
         .setStyle(ButtonStyle.Danger),
     );
   }
@@ -191,7 +194,7 @@ export function buildModButtons(
       new ButtonBuilder()
         .setCustomId(`mod:ban:${userId}`)
         .setLabel('Ban')
-        .setEmoji('🔨')
+        .setEmoji(buttonEmoji('blackbolt'))
         .setStyle(ButtonStyle.Danger),
     );
   }
@@ -201,7 +204,7 @@ export function buildModButtons(
       new ButtonBuilder()
         .setCustomId(`mod:undnr:${opts.protectorId}:${userId}`)
         .setLabel('Undnr')
-        .setEmoji('✅')
+        .setEmoji(buttonEmoji('animatedbolt'))
         .setStyle(ButtonStyle.Success),
     );
   }
@@ -211,7 +214,7 @@ export function buildModButtons(
       new ButtonBuilder()
         .setCustomId(`mod:dnr:${opts.protectorId}:${userId}`)
         .setLabel('DNR')
-        .setEmoji('🚫')
+        .setEmoji(buttonEmoji('blackbolt'))
         .setStyle(ButtonStyle.Danger),
     );
   }
@@ -225,7 +228,7 @@ export function buildModButtons(
     new ButtonBuilder()
       .setCustomId(editId)
       .setLabel('Edit Reason')
-      .setEmoji('📝')
+      .setEmoji(buttonEmoji('animatedbolt'))
       .setStyle(ButtonStyle.Primary),
   );
 
@@ -238,7 +241,7 @@ export function usageEmbed(command: string, usage: string, prefix: string): Embe
 
   return new EmbedBuilder()
     .setColor(Colors.error)
-    .setTitle(`❓ How to use \`${prefix}${command}\``)
+    .setTitle(`${blackBolt()} How to use \`${prefix}${command}\``)
     .setDescription(
       `That command was used incorrectly.\n\n**Usage**\n\`${syntax}\`\n\n**Example**\n\`${example}\``,
     );
@@ -247,6 +250,6 @@ export function usageEmbed(command: string, usage: string, prefix: string): Embe
 export function didYouMeanEmbed(botName: string): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(Colors.error)
-    .setDescription('**Did you mean one of these?**')
+    .setDescription(`**${blackBolt()} Did you mean one of these?**`)
     .setFooter({ text: botName });
 }

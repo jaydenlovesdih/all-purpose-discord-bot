@@ -6,6 +6,7 @@ import {
   logChannelForAction,
   sendToLogChannel,
 } from './log.js';
+import { blackBolt, bolt } from './emojis.js';
 
 export interface ModActionContext {
   guild: Guild;
@@ -56,36 +57,40 @@ function nextCaseId(guildId: string): number {
   return id;
 }
 
-const ACTION_META: Record<string, { emoji: string; title: string; verb: string }> = {
-  ban: { emoji: '🔨', title: 'User Banned', verb: 'has been permanently banned.' },
-  softban: { emoji: '🔨', title: 'User Softbanned', verb: 'has been softbanned.' },
-  hardban: { emoji: '🔨', title: 'User Hardbanned', verb: 'has been hardbanned.' },
-  unhardban: { emoji: '🔓', title: 'Hardban Removed', verb: 'is no longer hardbanned.' },
-  unban: { emoji: '🔓', title: 'User Unbanned', verb: 'has been unbanned.' },
-  kick: { emoji: '👢', title: 'User Kicked', verb: 'has been kicked.' },
-  mute: { emoji: '🔇', title: 'User Muted', verb: 'has been muted.' },
-  timeout: { emoji: '⏱️', title: 'User Timed Out', verb: 'has been timed out.' },
-  unmute: { emoji: '🔊', title: 'User Unmuted', verb: 'has been unmuted.' },
-  untimeout: { emoji: '🔊', title: 'User Unmuted', verb: 'has been unmuted.' },
-  jail: { emoji: '🔒', title: 'User Jailed', verb: 'has been jailed.' },
-  unjail: { emoji: '🔓', title: 'User Unjailed', verb: 'has been released from jail.' },
-  purge: { emoji: '🗑️', title: 'Messages Purged', verb: 'messages were purged.' },
-  strip: { emoji: '🧹', title: 'Roles Stripped', verb: 'had their roles stripped.' },
-  roleadd: { emoji: '➕', title: 'Role Added', verb: 'received a role.' },
-  roleremove: { emoji: '➖', title: 'Role Removed', verb: 'had a role removed.' },
-  warn: { emoji: '⚠️', title: 'User Warned', verb: 'has been warned.' },
-  dnr: { emoji: '🚫', title: 'Do Not Reply', verb: 'must not reply to your messages.' },
-  undnr: { emoji: '✅', title: 'DNR Removed', verb: 'may reply to you again.' },
-};
+function actionMeta(action: string): { emoji: string; title: string; verb: string } {
+  const map: Record<string, { emoji: string; title: string; verb: string }> = {
+    ban: { emoji: blackBolt(), title: 'User Banned', verb: 'has been permanently banned.' },
+    softban: { emoji: blackBolt(), title: 'User Softbanned', verb: 'has been softbanned.' },
+    hardban: { emoji: blackBolt(), title: 'User Hardbanned', verb: 'has been hardbanned.' },
+    unhardban: { emoji: bolt(), title: 'Hardban Removed', verb: 'is no longer hardbanned.' },
+    unban: { emoji: bolt(), title: 'User Unbanned', verb: 'has been unbanned.' },
+    kick: { emoji: blackBolt(), title: 'User Kicked', verb: 'has been kicked.' },
+    mute: { emoji: blackBolt(), title: 'User Muted', verb: 'has been muted.' },
+    timeout: { emoji: blackBolt(), title: 'User Timed Out', verb: 'has been timed out.' },
+    unmute: { emoji: bolt(), title: 'User Unmuted', verb: 'has been unmuted.' },
+    untimeout: { emoji: bolt(), title: 'User Unmuted', verb: 'has been unmuted.' },
+    jail: { emoji: blackBolt(), title: 'User Jailed', verb: 'has been jailed.' },
+    unjail: { emoji: bolt(), title: 'User Unjailed', verb: 'has been released from jail.' },
+    purge: { emoji: blackBolt(), title: 'Messages Purged', verb: 'messages were purged.' },
+    strip: { emoji: blackBolt(), title: 'Roles Stripped', verb: 'had their roles stripped.' },
+    roleadd: { emoji: bolt(), title: 'Role Added', verb: 'received a role.' },
+    roleremove: { emoji: blackBolt(), title: 'Role Removed', verb: 'had a role removed.' },
+    warn: { emoji: bolt(), title: 'User Warned', verb: 'has been warned.' },
+    dnr: { emoji: blackBolt(), title: 'Do Not Reply', verb: 'must not reply to your messages.' },
+    undnr: { emoji: bolt(), title: 'DNR Removed', verb: 'may reply to you again.' },
+  };
+  return (
+    map[action] ?? {
+      emoji: bolt(),
+      title: action,
+      verb: `was ${action}ed.`,
+    }
+  );
+}
 
 export async function sendModLog(ctx: ModActionContext): Promise<number> {
   const caseId = nextCaseId(ctx.guild.id);
-
-  const meta = ACTION_META[ctx.action] ?? {
-    emoji: '📋',
-    title: ctx.action,
-    verb: `was ${ctx.action}ed.`,
-  };
+  const meta = actionMeta(ctx.action);
 
   const embed = buildServerLogEmbed({
     emoji: meta.emoji,

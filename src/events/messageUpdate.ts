@@ -2,7 +2,7 @@ import { Events } from 'discord.js';
 import { BotClient } from '../types/index.js';
 import { pushEditSnipe } from '../utils/snipeStore.js';
 import { sendLog } from '../utils/log.js';
-import { Colors } from '../utils/embeds.js';
+import { bolt } from '../utils/emojis.js';
 
 export default {
   name: Events.MessageUpdate,
@@ -11,15 +11,42 @@ export default {
     newMessage: import('discord.js').Message | import('discord.js').PartialMessage,
     _client: BotClient,
   ) {
-    pushEditSnipe(oldMessage, newMessage);
-    if (oldMessage.guild && !oldMessage.author?.bot && (oldMessage.content ?? '') !== (newMessage.content ?? '')) {
-      await sendLog(
-        oldMessage.guild,
-        'messageEdit',
-        'Message Edited',
-        `**Author:** ${oldMessage.author?.tag ?? 'Unknown'}\n**Channel:** <#${oldMessage.channel?.id}>\n**Before:** ${(oldMessage.content || '*empty*').slice(0, 400)}\n**After:** ${(newMessage.content || '*empty*').slice(0, 400)}`,
-        Colors.warning,
-      );
+    let before = oldMessage;
+    let after = newMessage;
+
+    if (oldMessage.partial) {
+      before = await oldMessage.fetch().catch(() => oldMessage);
     }
+    if (newMessage.partial) {
+      after = await newMessage.fetch().catch(() => newMessage);
+    }
+
+    pushEditSnipe(before, after);
+
+    if (
+      !before.guild ||
+      before.author?.bot ||
+      (before.content ?? '') === (after.content ?? '')
+    ) {
+      return;
+    }
+
+    await sendLog(
+      before.guild,
+      'messageEdit',
+      'Message Edited',
+      `**${before.author?.username ?? 'Unknown'}** edited a message.`,
+      undefined,
+      {
+        emoji: bolt(),
+        reason: 'Message edited',
+        moderator: before.author ?? null,
+        detail: { name: '#️⃣ Channel:', value: `<#${before.channel?.id}>` },
+        target: before.author ?? null,
+        content: `**Before:**\n${(before.content || '*empty*').slice(0, 450)}\n\n**After:**\n${(after.content || '*empty*').slice(0, 450)}`,
+        contentLabel: '📄 Edit:',
+        footer: `User ID: ${before.author?.id ?? 'unknown'}`,
+      },
+    );
   },
 };

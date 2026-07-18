@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import { BotClient } from '../types/index.js';
 import { Colors } from './embeds.js';
+import { bolt } from './emojis.js';
 
 export const HELP_CATEGORIES = [
   { id: 'mod', label: 'Moderation' },
@@ -112,7 +113,7 @@ export function buildHelpEmbed(
 
   const embed = new EmbedBuilder()
     .setColor(Colors.success)
-    .setTitle(`📚 Help: ${categoryLabel(category)}`)
+    .setTitle(`${bolt()} Help: ${categoryLabel(category)}`)
     .setDescription(
       `Use \`${prefix}[command]\` to interact with the bot.\n\n**Commands:**\n${list}`,
     )

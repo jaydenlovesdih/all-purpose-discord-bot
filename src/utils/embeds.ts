@@ -1,4 +1,5 @@
 import { EmbedBuilder, User } from 'discord.js';
+import { blackBolt, bolt } from './emojis.js';
 
 /** Embed sidebar colors */
 export const Colors = {
@@ -16,27 +17,27 @@ function mentionOf(user: User | string): string {
   return typeof user === 'string' ? user : `<@${user.id}>`;
 }
 
-/** Bleed-style success: green bar + ✅ @user: message (no title) */
+/** Bleed-style success */
 export function ok(user: User | string, message: string): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(Colors.success)
-    .setDescription(`✅ ${mentionOf(user)}: ${message}`);
+    .setDescription(`${bolt()} ${mentionOf(user)}: ${message}`);
 }
 
 /** Bleed-style error */
 export function fail(user: User | string, message: string): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(Colors.error)
-    .setDescription(`❌ ${mentionOf(user)}: ${message}`);
+    .setDescription(`${blackBolt()} ${mentionOf(user)}: ${message}`);
 }
 
 /** @deprecated use ok() — kept so old call sites still look Bleed-like */
 export function successEmbed(description: string, _title?: string): EmbedBuilder {
-  return new EmbedBuilder().setColor(Colors.success).setDescription(`✅ ${description}`);
+  return new EmbedBuilder().setColor(Colors.success).setDescription(`${bolt()} ${description}`);
 }
 
 export function errorEmbed(description: string, _title?: string): EmbedBuilder {
-  return new EmbedBuilder().setColor(Colors.error).setDescription(`❌ ${description}`);
+  return new EmbedBuilder().setColor(Colors.error).setDescription(`${blackBolt()} ${description}`);
 }
 
 export function infoEmbed(description: string, title?: string): EmbedBuilder {

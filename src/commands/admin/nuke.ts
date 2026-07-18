@@ -15,6 +15,7 @@ import {
   isNukeable,
   pendingNukes,
 } from '../../utils/nuke.js';
+import { blackBolt, buttonEmoji } from '../../utils/emojis.js';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -76,7 +77,7 @@ const command: Command = {
 
     const embed = new EmbedBuilder()
       .setColor(Colors.error)
-      .setTitle('💣 Confirm Channel Nuke')
+      .setTitle(`${blackBolt()} Confirm Channel Nuke`)
       .setDescription(
         [
           `Are you sure you want to nuke ${target}?`,
@@ -93,12 +94,12 @@ const command: Command = {
       new ButtonBuilder()
         .setCustomId('nuke:confirm')
         .setLabel('Confirm')
-        .setEmoji('💣')
+        .setEmoji(buttonEmoji('blackbolt'))
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId('nuke:cancel')
         .setLabel('Cancel')
-        .setEmoji('❌')
+        .setEmoji(buttonEmoji('animatedbolt'))
         .setStyle(ButtonStyle.Secondary),
     );
 

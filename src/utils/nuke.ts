@@ -13,6 +13,7 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import { Colors } from './embeds.js';
+import { blackBolt } from './emojis.js';
 
 export type NukeableChannel =
   | TextChannel
@@ -143,7 +144,7 @@ export function buildNukeDoneEmbed(
 ): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(Colors.success)
-    .setTitle('💣 Channel Nuked')
+    .setTitle(`${blackBolt()} Channel Nuked`)
     .setDescription(
       [
         `**${name}** was deleted and recreated.`,

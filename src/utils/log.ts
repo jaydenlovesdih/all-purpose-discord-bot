@@ -1,6 +1,7 @@
 import { AttachmentBuilder, ChannelType, EmbedBuilder, Guild, TextChannel, User } from 'discord.js';
 import { getGuildConfig, LogChannels, mutateGuildConfig } from './guildConfig.js';
 import { Colors } from './embeds.js';
+import { blackBolt, bolt } from './emojis.js';
 
 export type LogChannelKey = keyof Omit<LogChannels, 'roles'>;
 
@@ -269,7 +270,7 @@ export async function sendLog(
   if (!cfg.logging.events[event]) {
     // Auto-enable setup-related events after config wipe / rediscovery
     if (
-      ['messageDelete', 'memberBan', 'memberUnban', 'memberRole', 'role', 'channel'].includes(event)
+      ['messageDelete', 'messageEdit', 'memberBan', 'memberUnban', 'memberRole', 'role', 'channel'].includes(event)
     ) {
       mutateGuildConfig(guild.id, (c) => {
         c.logging.events[event] = true;
@@ -297,18 +298,18 @@ export async function sendLog(
   const emoji =
     opts?.emoji ??
     (event === 'messageDelete'
-      ? '🗑️'
+      ? blackBolt()
       : event === 'messageEdit'
-        ? '✏️'
+        ? bolt()
         : event === 'memberBan'
-          ? '🔨'
+          ? blackBolt()
           : event === 'memberUnban'
-            ? '🔓'
+            ? bolt()
             : event === 'channel'
-              ? '📁'
+              ? bolt()
               : event === 'memberRole' || event === 'role'
-                ? '🎭'
-                : '📋');
+                ? bolt()
+                : bolt());
 
   const embed = buildServerLogEmbed({
     emoji,
@@ -380,7 +381,7 @@ export async function sendPurgeMessageHistory(
     .send({
       embeds: [
         buildServerLogEmbed({
-          emoji: '📜',
+          emoji: bolt(),
           title: 'Deleted Messages',
           description: `**${snapshots.length}** deleted message(s) saved to the attached file (oldest → newest).`,
           moderator: meta.moderator,

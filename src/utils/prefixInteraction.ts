@@ -247,6 +247,7 @@ export class PrefixCommandInteraction {
   readonly guild: Message['guild'];
   readonly guildId: string | null;
   readonly channel: Message['channel'];
+  readonly channelId: string;
   readonly client: Message['client'];
   readonly createdTimestamp: number;
 
@@ -267,6 +268,7 @@ export class PrefixCommandInteraction {
     this.guild = message.guild;
     this.guildId = message.guild?.id ?? null;
     this.channel = message.channel;
+    this.channelId = message.channel.id;
     this.client = message.client;
     this.createdTimestamp = message.createdTimestamp;
     const schema = prefixSchemas[commandName] ?? [];
