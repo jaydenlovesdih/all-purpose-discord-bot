@@ -94,7 +94,8 @@ const SUB_DETAILS: Record<string, Record<string, string>> = {
     category: 'Create/set the fallback ticket category (used with no types).',
     support: 'Toggle a support role that can see tickets. Usage: `support @role`',
     message: 'Set the panel description text.',
-    typeadd: 'Add a ticket type → its own category. Usage: `typeadd <id> #category <label>`',
+    typeadd:
+      'Add a ticket type → its own category. Usage: `typeadd <id> <categoryId|#category> <label>`',
     typeremove: 'Remove a ticket type. Usage: `typeremove <id>`',
     typelist: 'List configured ticket types and their categories.',
     close: 'Close the current ticket channel.',

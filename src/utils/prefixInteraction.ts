@@ -92,10 +92,12 @@ export class PrefixOptions {
       }
 
       if (arg.type === 'channel') {
-        const match = remaining.match(/^<#(\d+)>/);
+        // <#id> mention or raw snowflake (needed for categories — Discord's # picker often skips them)
+        const match = remaining.match(/^<#(\d+)>|^(\d{17,20})\b/);
         if (match) {
-          const channel = this.message.mentions.channels.get(match[1]) ??
-            this.message.guild?.channels.cache.get(match[1]);
+          const id = match[1] ?? match[2];
+          const channel =
+            this.message.mentions.channels.get(id) ?? this.message.guild?.channels.cache.get(id);
           if (channel) {
             this.values.set(arg.name, channel);
             remaining = remaining.slice(match[0].length).trim();

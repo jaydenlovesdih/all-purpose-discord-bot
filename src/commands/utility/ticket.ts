@@ -112,7 +112,7 @@ const command: Command = {
             `ticket system ready · default category <#${categoryId}> · panel posted in ${interaction.channel}` +
               (cfg.tickets.types.length
                 ? `\nAdd more types with \`ticket typeadd\` then re-run \`ticket panel\``
-                : `\nAdd types with \`ticket typeadd <id> #category <label>\` then \`ticket panel\``),
+                : `\nAdd types with \`ticket typeadd <id> <categoryId> <label>\` then \`ticket panel\``),
           ),
         ],
         ephemeral: true,
@@ -167,18 +167,35 @@ const command: Command = {
 
     if (sub === 'typeadd') {
       const id = value;
-      const label = text;
-      const cat =
+      let label = text?.trim() ?? '';
+      let cat =
         categoryChannel ??
         (interaction as unknown as { message?: import('discord.js').Message }).message?.mentions
-          .channels.first();
+          .channels.first() ??
+        null;
+
+      // Allow raw category id in the rest text: typeadd support 123456789012345678 General Support
+      if ((!cat || cat.type !== ChannelType.GuildCategory) && label) {
+        const idMatch = label.match(/^(\d{17,20})\b\s*(.*)$/s);
+        if (idMatch) {
+          const byId = guild.channels.cache.get(idMatch[1]);
+          if (byId) {
+            cat = byId;
+            label = idMatch[2].trim();
+          }
+        }
+      }
 
       if (!id || !label) {
         await interaction.reply({
           embeds: [
             fail(
               interaction.user,
-              'Usage: `ticket typeadd <id> #category <label>`\nExample: `ticket typeadd support #support-tickets General Support`',
+              [
+                'Usage: `ticket typeadd <id> <category> <label>`',
+                'Category = mention **or** category ID (Developer Mode → right-click category → Copy Channel ID)',
+                'Example: `ticket typeadd support 123456789012345678 General Support`',
+              ].join('\n'),
             ),
           ],
           ephemeral: true,
@@ -188,7 +205,12 @@ const command: Command = {
 
       if (!cat || cat.type !== ChannelType.GuildCategory) {
         await interaction.reply({
-          embeds: [fail(interaction.user, 'Provide a **category** channel for this ticket type')],
+          embeds: [
+            fail(
+              interaction.user,
+              'Provide a **category** (folder), not a text channel. Paste the category ID if `#` only shows channels.',
+            ),
+          ],
           ephemeral: true,
         });
         return;
@@ -249,7 +271,7 @@ const command: Command = {
         await interaction.reply({
           embeds: [
             infoEmbed(
-              'No ticket types yet.\nAdd one: `ticket typeadd support #category General Support`',
+              'No ticket types yet.\nAdd one: `ticket typeadd support 123456789012345678 General Support`',
               'Ticket Types',
             ),
           ],
