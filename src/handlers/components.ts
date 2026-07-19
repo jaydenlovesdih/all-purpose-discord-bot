@@ -549,6 +549,21 @@ export async function handleComponent(
     }
   }
 
+  if (interaction.isStringSelectMenu() && interaction.customId === 'ticket:type') {
+    if (!interaction.inGuild()) return true;
+    const typeId = interaction.values[0];
+    await interaction.deferReply({ ephemeral: true });
+    const result = await openTicket(interaction.guild!, interaction.user, typeId);
+    if ('error' in result) {
+      await interaction.editReply({ embeds: [fail(interaction.user, result.error)] });
+      return true;
+    }
+    await interaction.editReply({
+      embeds: [ok(interaction.user, `your ticket was created: ${result.channel}`)],
+    });
+    return true;
+  }
+
   if (interaction.isButton() && interaction.customId.startsWith('ticket:')) {
     if (!interaction.inGuild()) return true;
     const parts = interaction.customId.split(':');

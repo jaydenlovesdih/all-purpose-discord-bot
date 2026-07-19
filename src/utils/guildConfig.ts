@@ -97,6 +97,22 @@ export interface TicketChannelRecord {
   ownerId: string;
   number: number;
   createdAt: number;
+  /** Ticket type id when opened from a multi-type panel */
+  typeId?: string;
+}
+
+/** A selectable ticket option on the panel → its own category */
+export interface TicketType {
+  /** Stable id used in select values (e.g. support, appeals) */
+  id: string;
+  /** Button / select label */
+  label: string;
+  /** Category channel id where tickets of this type are created */
+  categoryId: string;
+  /** Optional emoji name/unicode for the select option */
+  emoji?: string;
+  /** Optional description shown under the select option */
+  description?: string;
 }
 
 export interface TicketsConfig {
@@ -106,6 +122,8 @@ export interface TicketsConfig {
   panelMessageId?: string;
   title: string;
   description: string;
+  /** Multi-type options on the same panel (each can use a different category) */
+  types: TicketType[];
   /** Active ticket channels keyed by channel id */
   open: Record<string, TicketChannelRecord>;
   nextNumber: number;
@@ -307,7 +325,8 @@ const DEFAULT_TICKETS: TicketsConfig = {
   supportRoleIds: [],
   title: '🎫 Support Tickets',
   description:
-    'Need help from staff? Click **Open Ticket** below and describe your issue.\n\nOnly open one ticket at a time.',
+    'Need help from staff? Choose a ticket type below and describe your issue.\n\nOnly open one ticket at a time.',
+  types: [],
   open: {},
   nextNumber: 1,
 };
@@ -340,7 +359,7 @@ function defaults(): GuildConfig {
     levels: { ...DEFAULT_LEVELS, rewards: [] },
     welcome: { ...DEFAULT_WELCOME, autoRoleIds: [] },
     starboard: { ...DEFAULT_STARBOARD },
-    tickets: { ...DEFAULT_TICKETS, open: {}, supportRoleIds: [] },
+    tickets: { ...DEFAULT_TICKETS, open: {}, supportRoleIds: [], types: [] },
     logging: { ...DEFAULT_LOGGING, events: { ...DEFAULT_LOGGING.events } },
     logChannels: {},
     botLocked: true,
@@ -388,6 +407,7 @@ export function getGuildConfig(guildId: string): GuildConfig {
       ...raw.tickets,
       open: { ...(raw.tickets?.open ?? {}) },
       supportRoleIds: raw.tickets?.supportRoleIds ?? [],
+      types: raw.tickets?.types ?? [],
     },
     logging: {
       ...DEFAULT_LOGGING,

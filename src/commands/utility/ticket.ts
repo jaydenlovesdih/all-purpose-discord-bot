@@ -1,14 +1,16 @@
-import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { getGuildConfig, mutateGuildConfig } from '../../utils/guildConfig.js';
 import { ok, fail, infoEmbed } from '../../utils/embeds.js';
 import {
+  addTicketType,
+  buildTicketPanelComponents,
   buildTicketPanelEmbed,
-  buildTicketPanelRow,
   closeTicket,
   ensureTicketCategory,
   getTicketRecord,
   openTicket,
+  removeTicketType,
 } from '../../utils/tickets.js';
 import { canBypass } from '../../utils/permissions.js';
 
@@ -27,13 +29,27 @@ const command: Command = {
           { name: 'category', value: 'category' },
           { name: 'support', value: 'support' },
           { name: 'message', value: 'message' },
+          { name: 'typeadd', value: 'typeadd' },
+          { name: 'typeremove', value: 'typeremove' },
+          { name: 'typelist', value: 'typelist' },
           { name: 'close', value: 'close' },
           { name: 'add', value: 'add' },
           { name: 'remove', value: 'remove' },
           { name: 'view', value: 'view' },
         ),
     )
-    .addStringOption((opt) => opt.setName('text').setDescription('Panel message text'))
+    .addStringOption((opt) =>
+      opt.setName('value').setDescription('Type id (for typeadd / typeremove)'),
+    )
+    .addStringOption((opt) =>
+      opt.setName('text').setDescription('Panel message, or type label for typeadd'),
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName('channel')
+        .setDescription('Category for typeadd (or leave empty)')
+        .addChannelTypes(ChannelType.GuildCategory),
+    )
     .addUserOption((opt) => opt.setName('user').setDescription('Member to add/remove'))
     .addRoleOption((opt) => opt.setName('role').setDescription('Support role for ticket staff')),
   guildOnly: true,
@@ -42,7 +58,9 @@ const command: Command = {
     const guild = interaction.guild!;
     const guildId = guild.id;
     const text = interaction.options.getString('text');
+    const value = interaction.options.getString('value');
     const targetUser = interaction.options.getUser('user');
+    const categoryChannel = interaction.options.getChannel('channel');
     const member = interaction.member as import('discord.js').GuildMember;
 
     const needsManageGuild =
@@ -51,6 +69,9 @@ const command: Command = {
       sub === 'category' ||
       sub === 'support' ||
       sub === 'message' ||
+      sub === 'typeadd' ||
+      sub === 'typeremove' ||
+      sub === 'typelist' ||
       sub === 'view';
 
     if (
@@ -75,8 +96,8 @@ const command: Command = {
       const categoryId = await ensureTicketCategory(guild);
       const cfg = getGuildConfig(guildId);
       const embed = buildTicketPanelEmbed(cfg.tickets, guild.name);
-      const row = buildTicketPanelRow();
-      const message = await channel.send({ embeds: [embed], components: [row] });
+      const components = buildTicketPanelComponents(cfg.tickets);
+      const message = await channel.send({ embeds: [embed], components });
 
       mutateGuildConfig(guildId, (c) => {
         c.tickets.categoryId = categoryId;
@@ -88,7 +109,10 @@ const command: Command = {
         embeds: [
           ok(
             interaction.user,
-            `ticket system ready · category <#${categoryId}> · panel posted in ${interaction.channel}`,
+            `ticket system ready · default category <#${categoryId}> · panel posted in ${interaction.channel}` +
+              (cfg.tickets.types.length
+                ? `\nAdd more types with \`ticket typeadd\` then re-run \`ticket panel\``
+                : `\nAdd types with \`ticket typeadd <id> #category <label>\` then \`ticket panel\``),
           ),
         ],
         ephemeral: true,
@@ -105,8 +129,8 @@ const command: Command = {
 
       const cfg = getGuildConfig(guildId);
       const embed = buildTicketPanelEmbed(cfg.tickets, guild.name);
-      const row = buildTicketPanelRow();
-      const message = await channel.send({ embeds: [embed], components: [row] });
+      const components = buildTicketPanelComponents(cfg.tickets);
+      const message = await channel.send({ embeds: [embed], components });
 
       mutateGuildConfig(guildId, (c) => {
         c.tickets.panelChannelId = interaction.channelId;
@@ -114,7 +138,15 @@ const command: Command = {
       });
 
       await interaction.reply({
-        embeds: [ok(interaction.user, `ticket panel posted in ${interaction.channel}`)],
+        embeds: [
+          ok(
+            interaction.user,
+            `ticket panel posted` +
+              (cfg.tickets.types.length
+                ? ` with **${cfg.tickets.types.length}** type(s)`
+                : ` (single Open Ticket button — add types with \`ticket typeadd\`)`),
+          ),
+        ],
         ephemeral: true,
       });
       return;
@@ -123,7 +155,120 @@ const command: Command = {
     if (sub === 'category') {
       const categoryId = await ensureTicketCategory(guild);
       await interaction.reply({
-        embeds: [ok(interaction.user, `ticket category set to <#${categoryId}>`)],
+        embeds: [
+          ok(
+            interaction.user,
+            `default ticket category set to <#${categoryId}> (used when no types are configured)`,
+          ),
+        ],
+      });
+      return;
+    }
+
+    if (sub === 'typeadd') {
+      const id = value;
+      const label = text;
+      const cat =
+        categoryChannel ??
+        (interaction as unknown as { message?: import('discord.js').Message }).message?.mentions
+          .channels.first();
+
+      if (!id || !label) {
+        await interaction.reply({
+          embeds: [
+            fail(
+              interaction.user,
+              'Usage: `ticket typeadd <id> #category <label>`\nExample: `ticket typeadd support #support-tickets General Support`',
+            ),
+          ],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (!cat || cat.type !== ChannelType.GuildCategory) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Provide a **category** channel for this ticket type')],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const result = addTicketType(guildId, {
+        id,
+        label,
+        categoryId: cat.id,
+      });
+
+      if ('error' in result) {
+        await interaction.reply({ embeds: [fail(interaction.user, result.error)], ephemeral: true });
+        return;
+      }
+
+      await interaction.reply({
+        embeds: [
+          ok(
+            interaction.user,
+            `added type **${result.label}** (\`${result.id}\`) → <#${result.categoryId}>\nRe-post the panel with \`ticket panel\` so members see it.`,
+          ),
+        ],
+      });
+      return;
+    }
+
+    if (sub === 'typeremove') {
+      if (!value) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Usage: `ticket typeremove <id>`')],
+          ephemeral: true,
+        });
+        return;
+      }
+      const removed = removeTicketType(guildId, value);
+      if (!removed) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, `No ticket type \`${value}\` found`)],
+          ephemeral: true,
+        });
+        return;
+      }
+      await interaction.reply({
+        embeds: [
+          ok(
+            interaction.user,
+            `removed type \`${value}\` — re-run \`ticket panel\` to update the public panel`,
+          ),
+        ],
+      });
+      return;
+    }
+
+    if (sub === 'typelist') {
+      const types = getGuildConfig(guildId).tickets.types;
+      if (!types.length) {
+        await interaction.reply({
+          embeds: [
+            infoEmbed(
+              'No ticket types yet.\nAdd one: `ticket typeadd support #category General Support`',
+              'Ticket Types',
+            ),
+          ],
+        });
+        return;
+      }
+      await interaction.reply({
+        embeds: [
+          infoEmbed(
+            types
+              .map(
+                (t, i) =>
+                  `**${i + 1}.** \`${t.id}\` — **${t.label}** → <#${t.categoryId}>` +
+                  (t.description ? `\n└ ${t.description}` : ''),
+              )
+              .join('\n'),
+            'Ticket Types',
+          ),
+        ],
       });
       return;
     }
@@ -238,15 +383,22 @@ const command: Command = {
 
     const t = getGuildConfig(guildId).tickets;
     const openCount = Object.keys(t.open).length;
+    const typeLines = t.types.length
+      ? t.types.map((ty) => `• \`${ty.id}\` **${ty.label}** → <#${ty.categoryId}>`).join('\n')
+      : '_None — using single Open Ticket button_';
+
     await interaction.reply({
       embeds: [
         infoEmbed(
           [
-            `Category: ${t.categoryId ? `<#${t.categoryId}>` : 'Not set (run \`ticket setup\`)'}`,
-            `Panel: ${t.panelChannelId && t.panelMessageId ? `<#${t.panelChannelId}> (${t.panelMessageId})` : 'Not posted'}`,
+            `Default category: ${t.categoryId ? `<#${t.categoryId}>` : 'Not set'}`,
+            `Panel: ${t.panelChannelId && t.panelMessageId ? `<#${t.panelChannelId}>` : 'Not posted'}`,
             `Support roles: ${t.supportRoleIds.map((id) => `<@&${id}>`).join(', ') || 'None'}`,
             `Open tickets: **${openCount}**`,
             `Next ticket #: **${t.nextNumber}**`,
+            '',
+            `**Types:**`,
+            typeLines,
             '',
             `**Title:** ${t.title}`,
             `**Message:** ${t.description}`,

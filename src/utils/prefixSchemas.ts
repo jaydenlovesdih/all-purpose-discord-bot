@@ -86,6 +86,8 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   ],
   ticket: [
     { name: 'subcommand', type: 'string', required: true },
+    { name: 'value', type: 'string' },
+    { name: 'channel', type: 'channel' },
     { name: 'role', type: 'role' },
     { name: 'user', type: 'user' },
     { name: 'text', type: 'rest' },

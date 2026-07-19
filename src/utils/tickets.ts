@@ -8,32 +8,89 @@ import {
   GuildMember,
   OverwriteType,
   PermissionFlagsBits,
+  StringSelectMenuBuilder,
   TextChannel,
   User,
 } from 'discord.js';
-import { getGuildConfig, mutateGuildConfig, TicketsConfig } from './guildConfig.js';
+import {
+  getGuildConfig,
+  mutateGuildConfig,
+  TicketType,
+  TicketsConfig,
+} from './guildConfig.js';
 import { Colors } from './embeds.js';
 import { canBypass } from './permissions.js';
+import { bolt } from './emojis.js';
 
 const CATEGORY_NAME = 'tickets';
 
 export function buildTicketPanelEmbed(cfg: TicketsConfig, guildName: string): EmbedBuilder {
+  const typeLines =
+    cfg.types.length > 0
+      ? [
+          '',
+          '**Options:**',
+          ...cfg.types.map((t) => `• **${t.label}**${t.description ? ` — ${t.description}` : ''}`),
+        ]
+      : [];
+
   return new EmbedBuilder()
     .setColor(Colors.success)
     .setTitle(cfg.title)
-    .setDescription(cfg.description)
+    .setDescription([cfg.description, ...typeLines].join('\n'))
     .setFooter({ text: `${guildName} · Support` })
     .setTimestamp();
 }
 
+/** Panel components: select menu when types exist, else a single Open Ticket button */
+export function buildTicketPanelComponents(
+  cfg: TicketsConfig,
+): ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] {
+  if (cfg.types.length > 0) {
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('ticket:type')
+      .setPlaceholder('Choose a ticket type…')
+      .addOptions(
+        cfg.types.slice(0, 25).map((t) => {
+          const option: {
+            label: string;
+            value: string;
+            description?: string;
+            emoji?: string;
+          } = {
+            label: t.label.slice(0, 100),
+            value: t.id,
+          };
+          if (t.description) option.description = t.description.slice(0, 100);
+          if (t.emoji) option.emoji = t.emoji;
+          return option;
+        }),
+      );
+
+    return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  }
+
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('ticket:open')
+        .setLabel('Open Ticket')
+        .setEmoji('🎫')
+        .setStyle(ButtonStyle.Success),
+    ),
+  ];
+}
+
+/** @deprecated use buildTicketPanelComponents */
 export function buildTicketPanelRow(): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('ticket:open')
-      .setLabel('Open Ticket')
-      .setEmoji('🎫')
-      .setStyle(ButtonStyle.Success),
-  );
+  return buildTicketPanelComponents({
+    supportRoleIds: [],
+    title: '',
+    description: '',
+    types: [],
+    open: {},
+    nextNumber: 1,
+  })[0] as ActionRowBuilder<ButtonBuilder>;
 }
 
 export function buildTicketCloseRow(channelId: string): ActionRowBuilder<ButtonBuilder> {
@@ -56,6 +113,10 @@ export function findOpenTicketChannelId(guildId: string, userId: string): string
 
 export function getTicketRecord(guildId: string, channelId: string) {
   return getGuildConfig(guildId).tickets.open[channelId];
+}
+
+export function getTicketType(guildId: string, typeId: string): TicketType | undefined {
+  return getGuildConfig(guildId).tickets.types.find((t) => t.id === typeId);
 }
 
 export function clearTicketChannel(guildId: string, channelId: string): void {
@@ -84,6 +145,14 @@ function sanitizeUsername(username: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
     .slice(0, 12) || 'user';
+}
+
+function sanitizeTypeId(raw: string): string {
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]/g, '')
+    .slice(0, 32);
 }
 
 export async function ensureTicketCategory(guild: Guild): Promise<string> {
@@ -115,9 +184,48 @@ export async function ensureTicketCategory(guild: Guild): Promise<string> {
   return category.id;
 }
 
+export function addTicketType(
+  guildId: string,
+  input: { id: string; label: string; categoryId: string; description?: string; emoji?: string },
+): TicketType | { error: string } {
+  const id = sanitizeTypeId(input.id);
+  if (!id) return { error: 'Invalid type id (use letters, numbers, - or _)' };
+  if (!input.label.trim()) return { error: 'Provide a label for this ticket type' };
+
+  const cfg = getGuildConfig(guildId);
+  if (cfg.tickets.types.length >= 25) return { error: 'Maximum of 25 ticket types' };
+  if (cfg.tickets.types.some((t) => t.id === id)) {
+    return { error: `Type \`${id}\` already exists — remove it first or pick another id` };
+  }
+
+  const type: TicketType = {
+    id,
+    label: input.label.trim().slice(0, 100),
+    categoryId: input.categoryId,
+    description: input.description?.trim().slice(0, 100) || undefined,
+    emoji: input.emoji?.trim() || undefined,
+  };
+
+  mutateGuildConfig(guildId, (c) => {
+    c.tickets.types.push(type);
+  });
+
+  return type;
+}
+
+export function removeTicketType(guildId: string, typeId: string): boolean {
+  const id = sanitizeTypeId(typeId);
+  const before = getGuildConfig(guildId).tickets.types.length;
+  mutateGuildConfig(guildId, (c) => {
+    c.tickets.types = c.tickets.types.filter((t) => t.id !== id);
+  });
+  return getGuildConfig(guildId).tickets.types.length < before;
+}
+
 export async function openTicket(
   guild: Guild,
   user: User,
+  typeId?: string,
 ): Promise<{ channel: TextChannel } | { error: string }> {
   const existingId = findOpenTicketChannelId(guild.id, user.id);
   if (existingId) {
@@ -131,14 +239,28 @@ export async function openTicket(
   const me = guild.members.me;
   if (!me) return { error: 'Bot member missing' };
 
-  const categoryId = await ensureTicketCategory(guild);
+  const cfg = getGuildConfig(guild.id);
+  let ticketType: TicketType | undefined;
+  let categoryId: string;
+
+  if (typeId) {
+    ticketType = cfg.tickets.types.find((t) => t.id === typeId);
+    if (!ticketType) return { error: 'Unknown ticket type — ask staff to update the panel' };
+    const cat = guild.channels.cache.get(ticketType.categoryId);
+    if (!cat || cat.type !== ChannelType.GuildCategory) {
+      return { error: `Category for **${ticketType.label}** is missing — ask staff to fix it` };
+    }
+    categoryId = ticketType.categoryId;
+  } else {
+    categoryId = await ensureTicketCategory(guild);
+  }
+
   let number = 1;
   mutateGuildConfig(guild.id, (c) => {
     number = c.tickets.nextNumber;
     c.tickets.nextNumber += 1;
   });
 
-  const cfg = getGuildConfig(guild.id);
   const overwrites: {
     id: string;
     type?: OverwriteType;
@@ -183,13 +305,16 @@ export async function openTicket(
     });
   }
 
+  const typeSlug = ticketType ? `-${sanitizeTypeId(ticketType.id).slice(0, 10)}` : '';
   const channel = (await guild.channels.create({
-    name: `ticket-${String(number).padStart(4, '0')}-${sanitizeUsername(user.username)}`,
+    name: `ticket${typeSlug}-${String(number).padStart(4, '0')}-${sanitizeUsername(user.username)}`,
     type: ChannelType.GuildText,
     parent: categoryId,
-    topic: `Ticket #${number} · ${user.tag} (${user.id})`,
+    topic: ticketType
+      ? `Ticket #${number} · ${ticketType.label} · ${user.tag} (${user.id})`
+      : `Ticket #${number} · ${user.tag} (${user.id})`,
     permissionOverwrites: overwrites,
-    reason: `Ticket opened by ${user.tag}`,
+    reason: `Ticket opened by ${user.tag}${ticketType ? ` (${ticketType.label})` : ''}`,
   })) as TextChannel;
 
   mutateGuildConfig(guild.id, (c) => {
@@ -197,6 +322,7 @@ export async function openTicket(
       ownerId: user.id,
       number,
       createdAt: Date.now(),
+      typeId: ticketType?.id,
     };
   });
 
@@ -205,15 +331,18 @@ export async function openTicket(
 
   const embed = new EmbedBuilder()
     .setColor(Colors.success)
-    .setTitle(`🎫 Ticket #${number}`)
+    .setTitle(`${bolt()} Ticket #${number}${ticketType ? ` · ${ticketType.label}` : ''}`)
     .setDescription(
       [
         `Welcome ${user}!`,
+        ticketType ? `**Type:** ${ticketType.label}` : null,
         '',
         'Please describe your issue and a staff member will assist you shortly.',
         '',
         'When you are done, click **Close Ticket** or ask staff to close it.',
-      ].join('\n'),
+      ]
+        .filter(Boolean)
+        .join('\n'),
     )
     .setFooter({ text: `Opened by ${user.tag}` })
     .setTimestamp();
