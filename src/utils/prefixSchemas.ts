@@ -145,6 +145,7 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   rolereaction: [{ name: 'role', type: 'role', required: true }],
   nuke: [{ name: 'channel', type: 'channel' }],
   botlock: [],
+  docs: [],
   snipe: [{ name: 'index', type: 'integer' }],
   editsnipe: [{ name: 'index', type: 'integer' }],
   afk: [{ name: 'reason', type: 'rest' }],

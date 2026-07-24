@@ -12,7 +12,7 @@ import {
 import { BotClient } from '../types/index.js';
 import { runCommand } from './commandRunner.js';
 import { getGuildConfig, mutateGuildConfig } from '../utils/guildConfig.js';
-import { canBypass } from '../utils/permissions.js';
+import { canBypass, isOwner } from '../utils/permissions.js';
 import { usageEmbed, ModActionType, buildModButtons, buildModEmbed } from '../utils/modResponse.js';
 import { ok, fail, Colors } from '../utils/embeds.js';
 import { PrefixCommandInteraction } from '../utils/prefixInteraction.js';
@@ -36,6 +36,7 @@ import {
   applyRoleReaction,
   pendingRoleReactions,
 } from '../utils/rolereaction.js';
+import { buildDocsComponents, buildDocsEmbed } from '../utils/botDocs.js';
 import {
   buildNukeDoneEmbed,
   executeNuke,
@@ -112,6 +113,76 @@ export async function handleComponent(
   interaction: import('discord.js').Interaction,
   client: BotClient,
 ): Promise<boolean> {
+  if (interaction.isButton() && interaction.customId.startsWith('docs:')) {
+    const parts = interaction.customId.split(':');
+    // docs:page:prev|next:<page>:<ownerId>
+    const ownerId = parts.at(-1);
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who opened docs can use these buttons')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const guild = interaction.guild;
+    if (
+      !guild ||
+      (!isOwner(interaction.user.id) && guild.ownerId !== interaction.user.id)
+    ) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the server owner or a bot owner can use docs')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const dir = parts[2];
+    let page = Number(parts[3]) || 0;
+    if (dir === 'prev') page -= 1;
+    if (dir === 'next') page += 1;
+
+    const prefix = getPrefix(interaction.guildId, config.prefix);
+    const { embed, page: safePage, totalPages } = buildDocsEmbed(prefix, page);
+    await interaction.update({
+      embeds: [embed],
+      components: buildDocsComponents(safePage, totalPages, interaction.user.id),
+    });
+    return true;
+  }
+
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('docs:jump:')) {
+    const ownerId = interaction.customId.split(':')[2];
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who opened docs can use this menu')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const guild = interaction.guild;
+    if (
+      !guild ||
+      (!isOwner(interaction.user.id) && guild.ownerId !== interaction.user.id)
+    ) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the server owner or a bot owner can use docs')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const page = Number(interaction.values[0]) || 0;
+    const prefix = getPrefix(interaction.guildId, config.prefix);
+    const { embed, page: safePage, totalPages } = buildDocsEmbed(prefix, page);
+    await interaction.update({
+      embeds: [embed],
+      components: buildDocsComponents(safePage, totalPages, interaction.user.id),
+    });
+    return true;
+  }
+
   if (interaction.isButton() && interaction.customId.startsWith('help:')) {
     const parts = interaction.customId.split(':');
     const kind = parts[1];

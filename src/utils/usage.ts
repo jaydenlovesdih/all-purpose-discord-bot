@@ -34,6 +34,7 @@ const EXAMPLES: Record<string, string> = {
   rolereaction: '@mog-winner',
   nuke: '#general',
   botlock: '',
+  docs: '',
   snipe: '1',
   editsnipe: '1',
   afk: 'brb food',
