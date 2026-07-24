@@ -146,6 +146,10 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   nuke: [{ name: 'channel', type: 'channel' }],
   botlock: [],
   docs: [],
+  allowserver: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'value', type: 'string' },
+  ],
   snipe: [{ name: 'index', type: 'integer' }],
   editsnipe: [{ name: 'index', type: 'integer' }],
   afk: [{ name: 'reason', type: 'rest' }],

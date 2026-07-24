@@ -35,6 +35,7 @@ const EXAMPLES: Record<string, string> = {
   nuke: '#general',
   botlock: '',
   docs: '',
+  allowserver: 'add 123456789012345678',
   snipe: '1',
   editsnipe: '1',
   afk: 'brb food',

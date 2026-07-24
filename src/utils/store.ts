@@ -56,7 +56,7 @@ export async function initStore(): Promise<void> {
   // Seed from local files if DB is empty (first migrate / local → Railway)
   if (rows.length === 0) {
     ensureDataDir();
-    for (const name of ['guilds.json', 'levels.json', 'warnings.json']) {
+    for (const name of ['guilds.json', 'levels.json', 'warnings.json', 'guild-whitelist.json']) {
       const path = filePath(name);
       if (!existsSync(path)) continue;
       try {
