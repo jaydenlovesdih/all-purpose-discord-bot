@@ -5,7 +5,7 @@ import { fail, ok } from '../../utils/embeds.js';
 import { resolveRole } from '../../utils/resolveRole.js';
 import { sendModLog } from '../../utils/moderation.js';
 
-const WINDOW_MS = 10 * 60 * 1000;
+const WINDOW_MS = 20 * 60 * 1000;
 const ROLE_ADD_INTERVAL_MS = 1_100;
 
 function sleep(ms: number): Promise<void> {
@@ -15,7 +15,7 @@ function sleep(ms: number): Promise<void> {
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName('recentrole')
-    .setDescription('Give a role to every member who joined in the past 10 minutes')
+    .setDescription('Give a role to every member who joined in the past 20 minutes')
     .addStringOption((opt) =>
       opt
         .setName('role')
@@ -84,7 +84,7 @@ const command: Command = {
         embeds: [
           ok(
             interaction.user,
-            `No members joined in the last **10 minutes** who still need ${role}`,
+            `No members joined in the last **20 minutes** who still need ${role}`,
           ),
         ],
       });
@@ -114,12 +114,12 @@ const command: Command = {
         role: role.name,
         recent_joiners: success,
         failed,
-        window: '10m',
+        window: '20m',
       },
     }).catch(() => undefined);
 
     const parts = [
-      `gave ${role} to **${success}** member${success === 1 ? '' : 's'} who joined in the last **10 minutes**`,
+      `gave ${role} to **${success}** member${success === 1 ? '' : 's'} who joined in the last **20 minutes**`,
     ];
     if (failed) parts.push(`(**${failed}** failed)`);
 
