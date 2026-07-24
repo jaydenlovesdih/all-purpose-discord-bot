@@ -80,6 +80,10 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'role', type: 'role', required: true },
     { name: 'reason', type: 'rest' },
   ],
+  recentrole: [
+    { name: 'role', type: 'role', required: true },
+    { name: 'reason', type: 'rest' },
+  ],
   clearwarnings: [
     { name: 'user', type: 'user', required: true },
     { name: 'reason', type: 'rest' },

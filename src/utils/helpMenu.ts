@@ -32,6 +32,7 @@ const MOD_CMDS = new Set([
   'warnings',
   'clearwarnings',
   'role',
+  'recentrole',
   'setup',
   'jail',
   'unjail',

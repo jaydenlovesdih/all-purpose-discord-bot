@@ -1,5 +1,6 @@
 import { GuildMember, Message, MessagePayload, User } from 'discord.js';
 import { PrefixArgDef, prefixSchemas } from './prefixSchemas.js';
+import { resolveRole } from './resolveRole.js';
 import { buildUsageLine } from './usage.js';
 type ReplyPayload = string | MessagePayload | import('discord.js').InteractionReplyOptions;
 
@@ -61,13 +62,14 @@ export class PrefixOptions {
       }
 
       if (arg.type === 'role') {
-        const match = remaining.match(/^<@&(\d+)>/);
-        if (match) {
-          const role = this.message.mentions.roles.get(match[1]) ??
-            this.message.guild?.roles.cache.get(match[1]);
+        // <@&id>, raw snowflake, quoted name, or single word (exact / fuzzy closest)
+        const mentionOrId = remaining.match(/^<@&(\d+)>|^(\d{17,20})\b/);
+        if (mentionOrId && this.message.guild) {
+          const id = mentionOrId[1] ?? mentionOrId[2];
+          const role = resolveRole(this.message.guild, id);
           if (role) {
             this.values.set(arg.name, role);
-            remaining = remaining.slice(match[0].length).trim();
+            remaining = remaining.slice(mentionOrId[0].length).trim();
             continue;
           }
         }
@@ -75,9 +77,7 @@ export class PrefixOptions {
         const nameMatch = remaining.match(/^("([^"]+)"|(\S+))/);
         if (nameMatch && this.message.guild) {
           const roleName = nameMatch[2] ?? nameMatch[3];
-          const role = this.message.guild.roles.cache.find(
-            (entry) => entry.name.toLowerCase() === roleName.toLowerCase(),
-          );
+          const role = resolveRole(this.message.guild, roleName);
           if (role) {
             this.values.set(arg.name, role);
             remaining = remaining.slice(nameMatch[0].length).trim();

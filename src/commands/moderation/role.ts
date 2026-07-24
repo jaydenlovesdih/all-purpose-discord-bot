@@ -4,24 +4,44 @@ import { canBypass } from '../../utils/permissions.js';
 import { fail } from '../../utils/embeds.js';
 import { buildModButtons, buildModEmbed } from '../../utils/modResponse.js';
 import { sendModLog } from '../../utils/moderation.js';
+import { resolveRole } from '../../utils/resolveRole.js';
+
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName('role')
     .setDescription('Add or remove a role from a member')
     .addUserOption((opt) => opt.setName('user').setDescription('Target member').setRequired(true))
-    .addRoleOption((opt) => opt.setName('role').setDescription('Role to toggle').setRequired(true))
+    .addStringOption((opt) =>
+      opt
+        .setName('role')
+        .setDescription('Role mention, ID, or name (closest match)')
+        .setRequired(true),
+    )
     .addStringOption((opt) => opt.setName('reason').setDescription('Reason')),
   permissions: [PermissionFlagsBits.ManageRoles],
   guildOnly: true,
   async execute(interaction) {
     const user = interaction.options.getUser('user', true);
-    const roleId = interaction.options.getRole('role', true).id;
     const reason = interaction.options.getString('reason') ?? 'No reason provided';
-    const role = interaction.guild!.roles.cache.get(roleId);
-    const member = interaction.guild!.members.cache.get(user.id);
+    // Prefix resolves roles into Role objects; slash passes a string (id / name / mention text)
+    const fromRole = interaction.options.getRole('role', false);
+    const roleInput = interaction.options.getString('role', false);
+    const resolved = fromRole ?? (roleInput ? resolveRole(interaction.guild!, roleInput) : null);
+    const role = resolved ? interaction.guild!.roles.cache.get(resolved.id) ?? null : null;
+    const member =
+      interaction.guild!.members.cache.get(user.id) ??
+      (await interaction.guild!.members.fetch(user.id).catch(() => null));
 
     if (!role) {
-      await interaction.reply({ embeds: [fail(interaction.user, 'Role not found in this server')], ephemeral: true });
+      await interaction.reply({
+        embeds: [
+          fail(
+            interaction.user,
+            `No role matched \`${roleInput ?? 'that'}\` — try an ID, @mention, or closer name`,
+          ),
+        ],
+        ephemeral: true,
+      });
       return;
     }
 
