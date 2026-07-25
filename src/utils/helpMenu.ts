@@ -65,6 +65,7 @@ const ADMIN_CMDS = new Set([
   'botlock',
   'docs',
   'allowserver',
+  'vanity',
 ]);
 
 const INFO_CMDS = new Set(['help', 'ping', 'botinfo', 'avatar', 'userinfo', 'serverinfo', 'roles']);
