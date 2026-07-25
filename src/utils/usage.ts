@@ -37,7 +37,7 @@ const EXAMPLES: Record<string, string> = {
   botlock: '',
   docs: '',
   allowserver: 'add 123456789012345678',
-  vanity: 'mogs',
+  vanity: '',
   snipe: '1',
   editsnipe: '1',
   afk: 'brb food',
