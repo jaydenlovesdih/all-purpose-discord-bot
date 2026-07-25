@@ -15,6 +15,7 @@ import { getGuildConfig, mutateGuildConfig } from '../utils/guildConfig.js';
 import { canBypass, isOwner } from '../utils/permissions.js';
 import { usageEmbed, ModActionType, buildModButtons, buildModEmbed } from '../utils/modResponse.js';
 import { ok, fail, Colors } from '../utils/embeds.js';
+import { bolt } from '../utils/emojis.js';
 import { PrefixCommandInteraction } from '../utils/prefixInteraction.js';
 import { getPrefix } from '../utils/setup.js';
 import { config } from '../config.js';
@@ -42,6 +43,11 @@ import {
   executeNuke,
   pendingNukes,
 } from '../utils/nuke.js';
+import {
+  executeUnbanAll,
+  isUnbanAllRunning,
+  pendingUnbanAlls,
+} from '../utils/unbanAll.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -449,6 +455,118 @@ export async function handleComponent(
                 '',
                 `**Image messages scanned:** ${pending.imageCount}`,
                 `**Unique reactors:** ${pending.userIds.length}`,
+              ].join('\n'),
+            )
+            .setTimestamp(),
+        ],
+        components: [],
+      });
+      return true;
+    }
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('unbanall:')) {
+    if (!interaction.inGuild()) return true;
+
+    const pending = pendingUnbanAlls.get(interaction.message.id);
+    if (!pending) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'This mass unban confirmation expired — run the command again')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (interaction.user.id !== pending.ownerId && !canBypass(interaction.user.id)) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran unbanall can confirm')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'unbanall:cancel') {
+      pendingUnbanAlls.delete(interaction.message.id);
+      await interaction.update({
+        embeds: [fail(interaction.user, 'Mass unban cancelled')],
+        components: [],
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'unbanall:confirm') {
+      const guild = interaction.guild!;
+      if (guild.id !== pending.guildId) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Wrong server for this confirmation')],
+          ephemeral: true,
+        });
+        return true;
+      }
+
+      if (isUnbanAllRunning(guild.id)) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'A mass unban is already running')],
+          ephemeral: true,
+        });
+        return true;
+      }
+
+      pendingUnbanAlls.delete(interaction.message.id);
+
+      await interaction.update({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.success)
+            .setTitle(`${bolt()} Mass Unban`)
+            .setDescription('Fetching ban list and starting paced unbans…')
+            .setTimestamp(),
+        ],
+        components: [],
+      });
+
+      const result = await executeUnbanAll(guild, pending.reason, async ({ processed, total, success, failed }) => {
+        await interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(Colors.success)
+              .setTitle(`${bolt()} Mass Unban In Progress`)
+              .setDescription(
+                [
+                  `Unbanning slowly to avoid rate limits…`,
+                  '',
+                  `**Progress:** ${processed}/${total}`,
+                  `✅ Unbanned: **${success}**`,
+                  `❌ Failed: **${failed}**`,
+                ].join('\n'),
+              )
+              .setTimestamp(),
+          ],
+          components: [],
+        });
+      });
+
+      if (result.total === 0) {
+        await interaction.editReply({
+          embeds: [fail(interaction.user, 'Nobody was banned (list was empty)')],
+          components: [],
+        });
+        return true;
+      }
+
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.success)
+            .setTitle(`${bolt()} Mass Unban Complete`)
+            .setDescription(
+              [
+                `Finished unbanning **${result.total}** user${result.total === 1 ? '' : 's'}.`,
+                '',
+                `✅ **Unbanned:** ${result.success}`,
+                `❌ **Failed:** ${result.failed}`,
+                '',
+                `Reason: ${pending.reason}`,
               ].join('\n'),
             )
             .setTimestamp(),

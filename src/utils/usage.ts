@@ -10,6 +10,7 @@ const EXAMPLES: Record<string, string> = {
   timeout: '@user 30m cool down',
   unmute: '@user cooled off',
   unban: '123456789012345678 appealed',
+  unbanall: 'cleared raid bans',
   jail: '@user breaking rules',
   unjail: '@user',
   strip: '@user mass ping',

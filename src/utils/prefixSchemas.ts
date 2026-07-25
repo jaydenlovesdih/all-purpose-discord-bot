@@ -40,6 +40,7 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'userid', type: 'string', required: true },
     { name: 'reason', type: 'rest' },
   ],
+  unbanall: [{ name: 'reason', type: 'rest' }],
   mute: [
     { name: 'user', type: 'user', required: true },
     { name: 'duration', type: 'string', required: true },

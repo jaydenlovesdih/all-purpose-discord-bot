@@ -39,6 +39,7 @@ const MOD_CMDS = new Set([
   'softban',
   'hardban',
   'unban',
+  'unbanall',
   'strip',
   'dnr',
   'undnr',
