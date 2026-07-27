@@ -31,13 +31,23 @@ export function withUserInstall<T extends { setIntegrationTypes: Function; setCo
     .setContexts(InteractionContextType.Guild) as T;
 }
 
-export function isUserInstallInteraction(interaction: ChatInputCommandInteraction): boolean {
+export function isUserInstallInteraction(
+  interaction: ChatInputCommandInteraction | import('discord.js').MessageComponentInteraction,
+): boolean {
   const owners = interaction.authorizingIntegrationOwners;
   if (!owners) return false;
   return (
     Object.prototype.hasOwnProperty.call(owners, String(ApplicationIntegrationType.UserInstall)) ||
     Object.prototype.hasOwnProperty.call(owners, ApplicationIntegrationType.UserInstall)
   );
+}
+
+/** True when this interaction came from Add to My Apps (user install), not guild bot install / prefix. */
+export function wantsPlainRoleReply(
+  interaction: ChatInputCommandInteraction | import('discord.js').MessageComponentInteraction,
+): boolean {
+  if ('commandMessage' in interaction) return false;
+  return isUserInstallInteraction(interaction);
 }
 
 /** Fetch all guild roles via REST (works when the bot is a member). */
@@ -166,23 +176,27 @@ export async function resolveRoleFromInteraction(
   return null;
 }
 
-export function formatRolePermissions(permissions: PermissionResolvable | string): string {
+export function formatPermissionNames(permissions: PermissionResolvable | string): string[] {
   const bits = new PermissionsBitField(
     typeof permissions === 'string' ? BigInt(permissions) : permissions,
   );
   if (bits.has(PermissionsBitField.Flags.Administrator)) {
-    return '**Administrator** (all permissions)';
+    return ['Administrator (all permissions)'];
   }
-  const list = bits.toArray();
-  if (!list.length) return '_No permissions_';
-  return list.map((p) => `\`${p}\``).join(', ');
+  return bits.toArray().map((p) => p.replace(/([a-z])([A-Z])/g, '$1 $2'));
+}
+
+export function formatRolePermissions(permissions: PermissionResolvable | string): string {
+  const names = formatPermissionNames(permissions);
+  if (!names.length) return '_No permissions_';
+  return names.map((p) => `• ${p}`).join('\n');
 }
 
 export function buildRoleInfoEmbed(role: RoleLike, guildName?: string | null): EmbedBuilder {
   const color = role.color || Colors.success;
   return new EmbedBuilder()
     .setColor(color)
-    .setTitle(`🔐 Permissions — ${role.name}`)
+    .setTitle(`Permissions — ${role.name}`)
     .setDescription(formatRolePermissions(role.permissions))
     .addFields(
       { name: 'Role', value: `<@&${role.id}>`, inline: true },
@@ -196,11 +210,36 @@ export function buildRoleInfoEmbed(role: RoleLike, guildName?: string | null): E
     .setTimestamp();
 }
 
+/** Plain-text role info for user-install (My Apps) replies — no embed. */
+export function buildRoleInfoText(role: RoleLike, guildName?: string | null): string {
+  const perms = formatPermissionNames(role.permissions);
+  const permBlock = perms.length
+    ? perms.map((p) => `• ${p}`).join('\n')
+    : '• (none)';
+
+  const lines = [
+    `**${role.name}**`,
+    guildName ? `Server: ${guildName}` : null,
+    `Role: <@&${role.id}>`,
+    `ID: \`${role.id}\``,
+    `Position: ${role.position} · Hoisted: ${role.hoist ? 'yes' : 'no'} · Mentionable: ${role.mentionable ? 'yes' : 'no'} · Managed: ${role.managed ? 'yes' : 'no'}`,
+    '',
+    '**Permissions**',
+    permBlock,
+  ].filter((l) => l !== null) as string[];
+
+  let text = lines.join('\n');
+  if (text.length > 1900) {
+    text = `${text.slice(0, 1900)}\n… _(truncated)_`;
+  }
+  return text;
+}
+
 export function buildRoleBrowseRow(ownerId: string): ActionRowBuilder<RoleSelectMenuBuilder> {
   return new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
     new RoleSelectMenuBuilder()
       .setCustomId(`roles:pick:${ownerId}`)
-      .setPlaceholder('Pick a role to view (works without bot in server)')
+      .setPlaceholder('Pick a role to view')
       .setMinValues(1)
       .setMaxValues(1),
   );
@@ -231,7 +270,7 @@ export function buildRolesListEmbed(
 
   const embed = new EmbedBuilder()
     .setColor(Colors.success)
-    .setTitle(`🎭 Roles — ${guildName}`)
+    .setTitle(`Roles — ${guildName}`)
     .setDescription(list)
     .setThumbnail(guildIcon ?? null)
     .setFooter({
@@ -240,6 +279,38 @@ export function buildRolesListEmbed(
     .setTimestamp();
 
   return { embed, page: safePage, totalPages };
+}
+
+/** Plain-text roles list for user-install (My Apps). */
+export function buildRolesListText(
+  roles: RoleLike[],
+  guildName: string,
+  page: number,
+): { content: string; page: number; totalPages: number } {
+  const ROLES_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(roles.length / ROLES_PER_PAGE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const slice = roles.slice(safePage * ROLES_PER_PAGE, safePage * ROLES_PER_PAGE + ROLES_PER_PAGE);
+
+  const body = slice.length
+    ? slice
+        .map((role, i) => {
+          const n = safePage * ROLES_PER_PAGE + i + 1;
+          return `${n}. <@&${role.id}> — \`${role.id}\``;
+        })
+        .join('\n')
+    : '(no roles)';
+
+  const content = [
+    `**Roles — ${guildName}**`,
+    `Page ${safePage + 1}/${totalPages} · ${roles.length} total`,
+    '',
+    body,
+    '',
+    '_Use the dropdown to inspect a role._',
+  ].join('\n');
+
+  return { content, page: safePage, totalPages };
 }
 
 export function buildRolesNavButtons(

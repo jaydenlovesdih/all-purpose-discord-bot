@@ -3,7 +3,9 @@ import { Command } from '../../types/index.js';
 import { fail } from '../../utils/embeds.js';
 import {
   buildRoleInfoEmbed,
+  buildRoleInfoText,
   resolveRoleFromInteraction,
+  wantsPlainRoleReply,
   withUserInstall,
 } from '../../utils/userInstall.js';
 
@@ -31,8 +33,8 @@ const command: Command = {
   async execute(interaction) {
     const isPrefix = 'commandMessage' in interaction;
     const ephemeral = !isPrefix;
+    const plain = wantsPlainRoleReply(interaction);
 
-    // Prefix schema still uses `role` as the role arg name
     const role = await resolveRoleFromInteraction(interaction);
 
     if (!role) {
@@ -40,17 +42,19 @@ const command: Command = {
         interaction.options.getString('query', false) ??
         interaction.options.getString('role', false) ??
         'that';
+      const tip = [
+        `No role matched \`${attempted}\`.`,
+        '• Use the **role picker** (works even if the bot is not in this server)',
+        '• Or pass a role ID / name when the bot is in the server',
+      ].join('\n');
+
+      if (plain) {
+        await interaction.reply({ content: tip, embeds: [], ephemeral });
+        return;
+      }
+
       await interaction.reply({
-        embeds: [
-          fail(
-            interaction.user,
-            [
-              `No role matched \`${attempted}\`.`,
-              '• Slash: use the **role picker** (works even if the bot is not in this server)',
-              '• Or pass a role ID / name when the bot is in the server',
-            ].join('\n'),
-          ),
-        ],
+        embeds: [fail(interaction.user, tip)],
         ephemeral,
       });
       return;
@@ -60,6 +64,15 @@ const command: Command = {
       interaction.guild?.name ??
       interaction.client.guilds.cache.get(interaction.guildId!)?.name ??
       undefined;
+
+    if (plain) {
+      await interaction.reply({
+        content: buildRoleInfoText(role, guildName),
+        embeds: [],
+        ephemeral,
+      });
+      return;
+    }
 
     await interaction.reply({
       embeds: [buildRoleInfoEmbed(role, guildName)],

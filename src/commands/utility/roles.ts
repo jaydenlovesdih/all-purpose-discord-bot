@@ -1,11 +1,13 @@
-import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
-import { fail, Colors } from '../../utils/embeds.js';
+import { fail } from '../../utils/embeds.js';
 import {
   buildRoleBrowseRow,
   buildRolesListEmbed,
+  buildRolesListText,
   buildRolesNavButtons,
   fetchGuildRolesApi,
+  wantsPlainRoleReply,
   withUserInstall,
 } from '../../utils/userInstall.js';
 
@@ -21,6 +23,7 @@ const command: Command = {
   async execute(interaction) {
     const isPrefix = 'commandMessage' in interaction;
     const ephemeral = !isPrefix;
+    const plain = wantsPlainRoleReply(interaction);
     const guildName =
       interaction.guild?.name ??
       interaction.client.guilds.cache.get(interaction.guildId!)?.name ??
@@ -32,8 +35,21 @@ const command: Command = {
 
     const roles = await fetchGuildRolesApi(interaction);
 
-    // Bot is in the server (or REST allowed) → full paginated list
     if (roles?.length) {
+      if (plain) {
+        const { content, page, totalPages } = buildRolesListText(roles, guildName, 0);
+        await interaction.reply({
+          content,
+          embeds: [],
+          components: [
+            buildRolesNavButtons(page, totalPages, interaction.user.id),
+            buildRoleBrowseRow(interaction.user.id),
+          ],
+          ephemeral,
+        });
+        return;
+      }
+
       const { embed, page, totalPages } = buildRolesListEmbed(roles, guildName, 0, guildIcon);
       await interaction.reply({
         embeds: [embed],
@@ -46,24 +62,29 @@ const command: Command = {
       return;
     }
 
-    // User-install in a server the bot is NOT in:
-    // Discord Role Select is populated by the client — no bot membership needed.
-    const embed = new EmbedBuilder()
-      .setColor(Colors.success)
-      .setTitle(`🎭 Roles — ${guildName}`)
-      .setDescription(
-        [
-          'The bot is not a member of this server, so it cannot download the full role list from the API.',
+    // No API list (bot not in server) — role select still works via Discord client
+    if (plain) {
+      await interaction.reply({
+        content: [
+          `**Roles — ${guildName}**`,
           '',
-          'Use the **dropdown below** — Discord fills it with every role in this server on your client.',
-          'Pick a role to see its ID and permissions (still only visible to you).',
+          'Use the dropdown below to browse roles.',
+          'Discord fills it from this server on your client — pick one to see permissions.',
         ].join('\n'),
-      )
-      .setThumbnail(guildIcon)
-      .setTimestamp();
+        embeds: [],
+        components: [buildRoleBrowseRow(interaction.user.id)],
+        ephemeral,
+      });
+      return;
+    }
 
     await interaction.reply({
-      embeds: [embed],
+      embeds: [
+        fail(
+          interaction.user,
+          'Use the **dropdown** to browse roles (Discord fills it from this server). Pick one to see permissions.',
+        ),
+      ],
       components: [buildRoleBrowseRow(interaction.user.id)],
       ephemeral,
     });
