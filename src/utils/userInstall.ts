@@ -322,6 +322,43 @@ export function buildRolePermFilterRow(
   );
 }
 
+export function buildRolePermChangeRow(ownerId: string): ActionRowBuilder<RoleSelectMenuBuilder> {
+  return new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
+    new RoleSelectMenuBuilder()
+      .setCustomId(`roleperms:pick:${ownerId}`)
+      .setPlaceholder('Change role…')
+      .setMinValues(1)
+      .setMaxValues(1),
+  );
+}
+
+export function buildRolePermComponents(
+  ownerId: string,
+  mode: RolePermViewMode,
+): ActionRowBuilder<ButtonBuilder | RoleSelectMenuBuilder>[] {
+  return [buildRolePermChangeRow(ownerId), buildRolePermFilterRow(ownerId, mode)];
+}
+
+export function roleLikeFromSelect(
+  selected: import('discord.js').Role | import('discord.js').APIRole,
+): RoleLike {
+  return {
+    id: selected.id,
+    name: selected.name,
+    permissions:
+      typeof selected.permissions === 'object' &&
+      selected.permissions &&
+      'bitfield' in selected.permissions
+        ? (selected.permissions as import('discord.js').PermissionsBitField).bitfield.toString()
+        : String((selected as { permissions?: string }).permissions ?? '0'),
+    position: selected.position,
+    color: selected.color,
+    hoist: selected.hoist,
+    managed: selected.managed,
+    mentionable: selected.mentionable,
+  };
+}
+
 export function rememberRolePermView(messageId: string, view: PendingRolePermView): void {
   pendingRolePermViews.set(messageId, view);
   setTimeout(() => pendingRolePermViews.delete(messageId), 15 * 60_000);

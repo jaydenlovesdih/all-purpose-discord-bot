@@ -4,7 +4,7 @@ import { fail } from '../../utils/embeds.js';
 import {
   buildRoleInfoEmbed,
   buildRoleInfoText,
-  buildRolePermFilterRow,
+  buildRolePermComponents,
   rememberRolePermView,
   resolveRoleFromInteraction,
   wantsPlainRoleReply,
@@ -67,19 +67,19 @@ const command: Command = {
       interaction.client.guilds.cache.get(interaction.guildId!)?.name ??
       undefined;
 
-    const filterRow = buildRolePermFilterRow(interaction.user.id, 'danger');
+    const components = buildRolePermComponents(interaction.user.id, 'danger');
 
     if (plain) {
       await interaction.reply({
         content: buildRoleInfoText(role, guildName, 'danger'),
         embeds: [],
-        components: [filterRow],
+        components,
         ephemeral,
       });
     } else {
       await interaction.reply({
         embeds: [buildRoleInfoEmbed(role, guildName, 'danger')],
-        components: [filterRow],
+        components,
         ephemeral,
       });
     }

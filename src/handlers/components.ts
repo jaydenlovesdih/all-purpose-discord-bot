@@ -35,13 +35,14 @@ import {
   buildRoleBrowseRow,
   buildRoleInfoEmbed,
   buildRoleInfoText,
-  buildRolePermFilterRow,
+  buildRolePermComponents,
   buildRolesListEmbed,
   buildRolesListText,
   buildRolesNavButtons,
   fetchGuildRolesApi,
   pendingRolePermViews,
   rememberRolePermView,
+  roleLikeFromSelect,
   wantsPlainRoleReply,
   type RolePermViewMode,
 } from '../utils/userInstall.js';
@@ -387,7 +388,7 @@ export async function handleComponent(
       await interaction.reply({
         content: buildRoleInfoText(roleLike, guildName, 'danger'),
         embeds: [],
-        components: [buildRolePermFilterRow(interaction.user.id, 'danger')],
+        components: buildRolePermComponents(interaction.user.id, 'danger'),
         ephemeral: true,
       });
       const message = await interaction.fetchReply();
@@ -403,7 +404,7 @@ export async function handleComponent(
 
     await interaction.reply({
       embeds: [buildRoleInfoEmbed(roleLike, guildName, 'danger')],
-      components: [buildRolePermFilterRow(interaction.user.id, 'danger')],
+      components: buildRolePermComponents(interaction.user.id, 'danger'),
       ephemeral: true,
     });
     const message = await interaction.fetchReply();
@@ -413,6 +414,57 @@ export async function handleComponent(
       guildName,
       plain: false,
       mode: 'danger',
+    });
+    return true;
+  }
+
+  if (interaction.isRoleSelectMenu() && interaction.customId.startsWith('roleperms:pick:')) {
+    const ownerId = interaction.customId.split(':')[2];
+    if (ownerId && ownerId !== interaction.user.id && !canBypass(interaction.user.id)) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran the command can use this menu')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const selected = interaction.roles.first();
+    if (!selected) {
+      await interaction.reply({ content: 'No role selected.', ephemeral: true });
+      return true;
+    }
+
+    const roleLike = roleLikeFromSelect(selected);
+    const guildName =
+      interaction.guild?.name ??
+      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
+      undefined;
+
+    const existing = pendingRolePermViews.get(interaction.message.id);
+    const plain = existing?.plain ?? wantsPlainRoleReply(interaction);
+    const mode: RolePermViewMode = existing?.mode ?? 'danger';
+    const viewOwner = existing?.ownerId ?? interaction.user.id;
+
+    rememberRolePermView(interaction.message.id, {
+      ownerId: viewOwner,
+      role: roleLike,
+      guildName: guildName ?? existing?.guildName,
+      plain,
+      mode,
+    });
+
+    if (plain) {
+      await interaction.update({
+        content: buildRoleInfoText(roleLike, guildName ?? existing?.guildName, mode),
+        embeds: [],
+        components: buildRolePermComponents(viewOwner, mode),
+      });
+      return true;
+    }
+
+    await interaction.update({
+      embeds: [buildRoleInfoEmbed(roleLike, guildName ?? existing?.guildName, mode)],
+      components: buildRolePermComponents(viewOwner, mode),
     });
     return true;
   }
@@ -447,14 +499,14 @@ export async function handleComponent(
       await interaction.update({
         content: buildRoleInfoText(pending.role, pending.guildName, mode),
         embeds: [],
-        components: [buildRolePermFilterRow(pending.ownerId, mode)],
+        components: buildRolePermComponents(pending.ownerId, mode),
       });
       return true;
     }
 
     await interaction.update({
       embeds: [buildRoleInfoEmbed(pending.role, pending.guildName, mode)],
-      components: [buildRolePermFilterRow(pending.ownerId, mode)],
+      components: buildRolePermComponents(pending.ownerId, mode),
     });
     return true;
   }
