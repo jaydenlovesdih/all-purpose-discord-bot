@@ -35,11 +35,15 @@ import {
   buildRoleBrowseRow,
   buildRoleInfoEmbed,
   buildRoleInfoText,
+  buildRolePermFilterRow,
   buildRolesListEmbed,
   buildRolesListText,
   buildRolesNavButtons,
   fetchGuildRolesApi,
+  pendingRolePermViews,
+  rememberRolePermView,
   wantsPlainRoleReply,
+  type RolePermViewMode,
 } from '../utils/userInstall.js';
 import { closeTicket, openTicket } from '../utils/tickets.js';
 import {
@@ -381,16 +385,76 @@ export async function handleComponent(
 
     if (wantsPlainRoleReply(interaction)) {
       await interaction.reply({
-        content: buildRoleInfoText(roleLike, guildName),
+        content: buildRoleInfoText(roleLike, guildName, 'all'),
         embeds: [],
+        components: [buildRolePermFilterRow(interaction.user.id, 'all')],
         ephemeral: true,
+      });
+      const message = await interaction.fetchReply();
+      rememberRolePermView(message.id, {
+        ownerId: interaction.user.id,
+        role: roleLike,
+        guildName,
+        plain: true,
+        mode: 'all',
       });
       return true;
     }
 
     await interaction.reply({
-      embeds: [buildRoleInfoEmbed(roleLike, guildName)],
+      embeds: [buildRoleInfoEmbed(roleLike, guildName, 'all')],
+      components: [buildRolePermFilterRow(interaction.user.id, 'all')],
       ephemeral: true,
+    });
+    const message = await interaction.fetchReply();
+    rememberRolePermView(message.id, {
+      ownerId: interaction.user.id,
+      role: roleLike,
+      guildName,
+      plain: false,
+      mode: 'all',
+    });
+    return true;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('roleperms:view:')) {
+    // roleperms:view:all|danger:<ownerId>
+    const parts = interaction.customId.split(':');
+    const nextMode = parts[2] as RolePermViewMode;
+    const ownerId = parts[3];
+    if (ownerId && ownerId !== interaction.user.id && !canBypass(interaction.user.id)) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran the command can use this button')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const pending = pendingRolePermViews.get(interaction.message.id);
+    if (!pending) {
+      await interaction.reply({
+        content: 'This permission view expired — run the command again.',
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const mode: RolePermViewMode = nextMode === 'danger' ? 'danger' : 'all';
+    pending.mode = mode;
+    pendingRolePermViews.set(interaction.message.id, pending);
+
+    if (pending.plain) {
+      await interaction.update({
+        content: buildRoleInfoText(pending.role, pending.guildName, mode),
+        embeds: [],
+        components: [buildRolePermFilterRow(pending.ownerId, mode)],
+      });
+      return true;
+    }
+
+    await interaction.update({
+      embeds: [buildRoleInfoEmbed(pending.role, pending.guildName, mode)],
+      components: [buildRolePermFilterRow(pending.ownerId, mode)],
     });
     return true;
   }

@@ -176,31 +176,83 @@ export async function resolveRoleFromInteraction(
   return null;
 }
 
-export function formatPermissionNames(permissions: PermissionResolvable | string): string[] {
+/** High-impact permissions worth reviewing first */
+const DANGEROUS_PERMISSION_FLAGS = new Set<string>([
+  'Administrator',
+  'BanMembers',
+  'KickMembers',
+  'ManageGuild',
+  'ManageRoles',
+  'ManageChannels',
+  'ManageWebhooks',
+  'ManageMessages',
+  'ManageNicknames',
+  'ManageGuildExpressions',
+  'ManageEvents',
+  'ManageThreads',
+  'ModerateMembers',
+  'MentionEveryone',
+  'ViewAuditLog',
+  'MuteMembers',
+  'DeafenMembers',
+  'MoveMembers',
+]);
+
+export function formatPermissionNames(
+  permissions: PermissionResolvable | string,
+  opts?: { dangerousOnly?: boolean },
+): string[] {
   const bits = new PermissionsBitField(
     typeof permissions === 'string' ? BigInt(permissions) : permissions,
   );
   if (bits.has(PermissionsBitField.Flags.Administrator)) {
     return ['Administrator (all permissions)'];
   }
-  return bits
-    .toArray()
+
+  let flags = bits.toArray();
+  if (opts?.dangerousOnly) {
+    flags = flags.filter((f) => DANGEROUS_PERMISSION_FLAGS.has(f));
+  }
+
+  return flags
     .map((p) => p.replace(/([a-z])([A-Z])/g, '$1 $2'))
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
-export function formatRolePermissions(permissions: PermissionResolvable | string): string {
-  const names = formatPermissionNames(permissions);
-  if (!names.length) return '_No permissions_';
+export function formatRolePermissions(
+  permissions: PermissionResolvable | string,
+  opts?: { dangerousOnly?: boolean },
+): string {
+  const names = formatPermissionNames(permissions, opts);
+  if (!names.length) {
+    return opts?.dangerousOnly ? '_No dangerous permissions_' : '_No permissions_';
+  }
   return names.map((p) => `• ${p}`).join('\n');
 }
 
-export function buildRoleInfoEmbed(role: RoleLike, guildName?: string | null): EmbedBuilder {
+export type RolePermViewMode = 'all' | 'danger';
+
+export interface PendingRolePermView {
+  ownerId: string;
+  role: RoleLike;
+  guildName?: string | null;
+  plain: boolean;
+  mode: RolePermViewMode;
+}
+
+export const pendingRolePermViews = new Map<string, PendingRolePermView>();
+
+export function buildRoleInfoEmbed(
+  role: RoleLike,
+  guildName?: string | null,
+  mode: RolePermViewMode = 'all',
+): EmbedBuilder {
+  const dangerousOnly = mode === 'danger';
   const color = role.color || Colors.success;
   return new EmbedBuilder()
     .setColor(color)
     .setTitle(`Permissions — ${role.name}`)
-    .setDescription(formatRolePermissions(role.permissions))
+    .setDescription(formatRolePermissions(role.permissions, { dangerousOnly }))
     .addFields(
       { name: 'Role', value: `<@&${role.id}>`, inline: true },
       { name: 'ID', value: `\`${role.id}\``, inline: true },
@@ -209,16 +261,25 @@ export function buildRoleInfoEmbed(role: RoleLike, guildName?: string | null): E
       { name: 'Mentionable', value: role.mentionable ? 'Yes' : 'No', inline: true },
       { name: 'Managed', value: role.managed ? 'Yes (integration)' : 'No', inline: true },
     )
-    .setFooter({ text: guildName || 'Server roles' })
+    .setFooter({
+      text: `${guildName || 'Server roles'} · ${dangerousOnly ? 'Dangerous only' : 'All permissions'}`,
+    })
     .setTimestamp();
 }
 
 /** Plain-text role info for user-install (My Apps) replies — no embed. */
-export function buildRoleInfoText(role: RoleLike, guildName?: string | null): string {
-  const perms = formatPermissionNames(role.permissions);
+export function buildRoleInfoText(
+  role: RoleLike,
+  guildName?: string | null,
+  mode: RolePermViewMode = 'all',
+): string {
+  const dangerousOnly = mode === 'danger';
+  const perms = formatPermissionNames(role.permissions, { dangerousOnly });
   const permBlock = perms.length
     ? perms.map((p) => `• ${p}`).join('\n')
-    : '• (none)';
+    : dangerousOnly
+      ? '• (none dangerous)'
+      : '• (none)';
 
   const lines = [
     `**${role.name}**`,
@@ -227,7 +288,7 @@ export function buildRoleInfoText(role: RoleLike, guildName?: string | null): st
     `ID: \`${role.id}\``,
     `Position: ${role.position} · Hoisted: ${role.hoist ? 'yes' : 'no'} · Mentionable: ${role.mentionable ? 'yes' : 'no'} · Managed: ${role.managed ? 'yes' : 'no'}`,
     '',
-    '**Permissions**',
+    dangerousOnly ? '**Dangerous permissions**' : '**Permissions**',
     permBlock,
   ].filter((l) => l !== null) as string[];
 
@@ -236,6 +297,24 @@ export function buildRoleInfoText(role: RoleLike, guildName?: string | null): st
     text = `${text.slice(0, 1900)}\n… _(truncated)_`;
   }
   return text;
+}
+
+export function buildRolePermFilterRow(
+  ownerId: string,
+  mode: RolePermViewMode,
+): ActionRowBuilder<ButtonBuilder> {
+  const showingDanger = mode === 'danger';
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`roleperms:view:${showingDanger ? 'all' : 'danger'}:${ownerId}`)
+      .setLabel(showingDanger ? 'Show all permissions' : 'Show dangerous only')
+      .setStyle(showingDanger ? ButtonStyle.Secondary : ButtonStyle.Danger),
+  );
+}
+
+export function rememberRolePermView(messageId: string, view: PendingRolePermView): void {
+  pendingRolePermViews.set(messageId, view);
+  setTimeout(() => pendingRolePermViews.delete(messageId), 15 * 60_000);
 }
 
 export function buildRoleBrowseRow(ownerId: string): ActionRowBuilder<RoleSelectMenuBuilder> {
