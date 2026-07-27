@@ -1,7 +1,8 @@
-import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ChannelType, GuildMember, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { getGuildConfig, mutateGuildConfig } from '../../utils/guildConfig.js';
 import { successEmbed, errorEmbed, infoEmbed, fail } from '../../utils/embeds.js';
+import { canBypass } from '../../utils/permissions.js';
 import {
   buildTwitterCaption,
   downloadTweetVideos,
@@ -71,8 +72,23 @@ const command: Command = {
     const plain = wantsPlainRoleReply(interaction);
 
     const requireManage = async (): Promise<boolean> => {
-      const canManage = interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
-      if (canManage) return true;
+      // Bot owners always bypass
+      if (canBypass(interaction.user.id)) return true;
+
+      // Discord server owner
+      if (interaction.guild?.ownerId === interaction.user.id) return true;
+
+      // Slash / cached permissions
+      if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
+
+      // Prefix + user-install: resolve the real guild member
+      let member = interaction.member instanceof GuildMember ? interaction.member : null;
+      if (!member && interaction.guild) {
+        member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      }
+      if (member?.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
+      if (member?.permissions.has(PermissionFlagsBits.Administrator)) return true;
+
       const tip = 'You need **Manage Server** for this setting.';
       if (plain) {
         await interaction.reply({ content: tip, embeds: [], ephemeral: true });
