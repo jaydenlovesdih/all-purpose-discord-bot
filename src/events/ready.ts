@@ -22,14 +22,14 @@ export default {
     }
     console.log(`Owner bypass IDs: ${config.ownerIds.join(', ')}`);
 
-    // Custom status (no Watching/Playing label) — shows as "discord.gg/mogs"
+    // Custom status (no Watching/Playing label) — shows as "/bestvids"
     client.user.setPresence({
       status: 'online',
       activities: [
         {
           type: ActivityType.Custom,
           name: 'Custom Status',
-          state: 'discord.gg/mogs',
+          state: '/bestvids',
         },
       ],
     });
