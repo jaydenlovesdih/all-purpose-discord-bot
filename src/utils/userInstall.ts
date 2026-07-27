@@ -183,7 +183,10 @@ export function formatPermissionNames(permissions: PermissionResolvable | string
   if (bits.has(PermissionsBitField.Flags.Administrator)) {
     return ['Administrator (all permissions)'];
   }
-  return bits.toArray().map((p) => p.replace(/([a-z])([A-Z])/g, '$1 $2'));
+  return bits
+    .toArray()
+    .map((p) => p.replace(/([a-z])([A-Z])/g, '$1 $2'))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 export function formatRolePermissions(permissions: PermissionResolvable | string): string {
