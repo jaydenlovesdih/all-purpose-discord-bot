@@ -96,6 +96,12 @@ export interface StarboardConfig {
 export interface TwitterVideoConfig {
   /** When true, auto-rehost Twitter/X videos posted in chat */
   enabled: boolean;
+  /** When true, include the post’s text with the uploaded video (default: video only) */
+  includeText: boolean;
+  /** When true, delete the original message that contained the Twitter/X link */
+  deleteOriginal: boolean;
+  /** Channel where conversions are logged (Twitter URL + Discord message link) */
+  logChannelId?: string;
 }
 
 export interface TicketChannelRecord {
@@ -329,6 +335,8 @@ const DEFAULT_STARBOARD: StarboardConfig = {
 
 const DEFAULT_TWITTER_VIDEO: TwitterVideoConfig = {
   enabled: false,
+  includeText: false,
+  deleteOriginal: true,
 };
 
 const DEFAULT_TICKETS: TicketsConfig = {

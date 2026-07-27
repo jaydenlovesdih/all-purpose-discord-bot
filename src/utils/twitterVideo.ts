@@ -1,4 +1,11 @@
-import { AttachmentBuilder } from 'discord.js';
+import {
+  AttachmentBuilder,
+  PermissionFlagsBits,
+  type Guild,
+  type Message,
+  type TextChannel,
+} from 'discord.js';
+import { getGuildConfig, type TwitterVideoConfig } from './guildConfig.js';
 
 const MAX_DISCORD_UPLOAD = 24 * 1024 * 1024; // leave headroom under 25MB
 const UA = 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discord.com)';
@@ -99,7 +106,6 @@ export async function fetchTweetMedia(tweetId: string): Promise<TweetMediaResult
     ...(status.media?.all ?? []).filter((m) => m.type === 'video' || m.type === 'gif'),
   ];
 
-  // Dedupe by id/url
   const seen = new Set<string>();
   const videos: TweetVideo[] = [];
   for (const v of rawVideos) {
@@ -169,7 +175,6 @@ export async function downloadTweetVideos(
       if (f.url) candidates.push(f.url);
     }
     if (video.url) candidates.unshift(video.url);
-    // unique
     const urls = [...new Set(candidates)];
 
     let buf: Buffer | null = null;
@@ -190,18 +195,44 @@ export async function downloadTweetVideos(
   return { attachments, skipped };
 }
 
-export function buildTwitterCaption(media: TweetMediaResult): string {
-  const snippet = media.text
-    ? media.text.length > 180
-      ? `${media.text.slice(0, 177)}…`
-      : media.text
-    : '';
+/** Caption for the video message — empty by default; post text only when includeText is on. */
+export function buildTwitterCaption(
+  media: TweetMediaResult,
+  includeText: boolean,
+): string | undefined {
+  if (!includeText) return undefined;
+  const text = media.text?.trim();
+  if (!text) return undefined;
+  return text.length > 1900 ? `${text.slice(0, 1897)}…` : text;
+}
+
+export function discordMessageLink(guildId: string, channelId: string, messageId: string): string {
+  return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
+}
+
+export async function logTwitterConversion(
+  guild: Guild,
+  cfg: TwitterVideoConfig,
+  opts: {
+    tweetUrl: string;
+    postedMessage: Message;
+    sourceUserTag?: string;
+  },
+): Promise<void> {
+  if (!cfg.logChannelId) return;
+
+  const channel = await guild.channels.fetch(cfg.logChannelId).catch(() => null);
+  if (!channel || !channel.isTextBased() || !channel.isSendable()) return;
+
+  const jump = discordMessageLink(guild.id, opts.postedMessage.channelId, opts.postedMessage.id);
   const lines = [
-    `**@${media.author}** · permanent video`,
-    snippet || null,
-    media.tweetUrl,
+    '**Twitter convert**',
+    opts.sourceUserTag ? `By: ${opts.sourceUserTag}` : null,
+    `Post: ${opts.tweetUrl}`,
+    `Discord: ${jump}`,
   ].filter(Boolean);
-  return lines.join('\n');
+
+  await channel.send({ content: lines.join('\n') }).catch(() => undefined);
 }
 
 /** In-memory dedupe so auto + manual don't double-post the same tweet quickly. */
@@ -221,27 +252,31 @@ export function shouldSkipRecent(guildId: string, tweetId: string): boolean {
   return false;
 }
 
-/** Auto-convert Twitter/X videos in a guild message. Returns true if a video was posted. */
-export async function handleTwitterAutoMessage(
-  message: import('discord.js').Message,
-): Promise<boolean> {
+function channelPerms(message: Message, me: NonNullable<Guild['members']['me']>) {
+  if (message.channel.isThread()) return message.channel.permissionsFor(me);
+  if ('permissionsFor' in message.channel) return message.channel.permissionsFor(me);
+  return null;
+}
+
+/** Auto-convert Twitter/X videos: delete link, post video, log. */
+export async function handleTwitterAutoMessage(message: Message): Promise<boolean> {
   if (!message.guild || !message.channel.isSendable()) return false;
   if (!message.content) return false;
 
   const ids = extractTweetIds(message.content);
   if (!ids.length) return false;
 
+  const cfg = getGuildConfig(message.guild.id).twitterVideo;
   const me = message.guild.members.me;
   if (me) {
-    const perms = message.channel.isThread()
-      ? message.channel.permissionsFor(me)
-      : 'permissionsFor' in message.channel
-        ? message.channel.permissionsFor(me)
-        : null;
-    if (perms && (!perms.has('SendMessages') || !perms.has('AttachFiles'))) return false;
+    const perms = channelPerms(message, me);
+    if (perms && (!perms.has(PermissionFlagsBits.SendMessages) || !perms.has(PermissionFlagsBits.AttachFiles))) {
+      return false;
+    }
   }
 
   let posted = false;
+  let deletedSource = false;
 
   for (const id of ids.slice(0, 2)) {
     if (shouldSkipRecent(message.guild.id, id)) continue;
@@ -255,16 +290,36 @@ export async function handleTwitterAutoMessage(
     }));
     if (!attachments.length) continue;
 
-    await message.channel
+    const caption = buildTwitterCaption(media, cfg.includeText);
+    const sent = await (message.channel as TextChannel)
       .send({
-        content: buildTwitterCaption(media).slice(0, 2000),
+        content: caption,
         files: attachments.slice(0, 10),
-        reply: { messageReference: message.id, failIfNotExists: false },
       })
-      .catch(() => undefined);
+      .catch(() => null);
+
+    if (!sent) continue;
 
     posted = true;
+
+    await logTwitterConversion(message.guild, cfg, {
+      tweetUrl: media.tweetUrl,
+      postedMessage: sent,
+      sourceUserTag: `${message.author} (\`${message.author.tag}\`)`,
+    });
   }
 
+  if (posted && cfg.deleteOriginal !== false) {
+    const canDelete =
+      !me ||
+      channelPerms(message, me)?.has(PermissionFlagsBits.ManageMessages) ||
+      message.author.id === me?.id;
+    if (canDelete) {
+      await message.delete().catch(() => undefined);
+      deletedSource = true;
+    }
+  }
+
+  void deletedSource;
   return posted;
 }

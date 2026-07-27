@@ -45,7 +45,7 @@ const EXAMPLES: Record<string, string> = {
   help: 'antinuke',
   levels: 'toggle on',
   starboard: 'emoji ⭐',
-  twitter: 'save https://x.com/user/status/123',
+  twitter: 'log #twitter-logs',
   giveaway: '1h Nitro Classic',
   poll: 'Should we host a movie night?',
   say: 'Hello everyone',
