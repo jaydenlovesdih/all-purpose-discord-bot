@@ -2,15 +2,15 @@ import { SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { fail } from '../../utils/embeds.js';
 import {
+  buildPermissionPromptText,
+  buildPermissionRolesComponents,
   buildPermissionRolesEmbed,
   buildPermissionRolesText,
-  buildPermissionSelectRow,
   findPermission,
   loadRolesForPermissionCheck,
   listAllPermissions,
   rememberPermissionRolesView,
   respondPermissionAutocomplete,
-  rolesLoadFailedMessage,
   wantsPlainRoleReply,
 } from '../../utils/permissionRoles.js';
 import { withUserInstall } from '../../utils/userInstall.js';
@@ -41,40 +41,31 @@ const command: Command = {
       interaction.options.getString('permission', false) ??
       interaction.options.getString('value', false);
 
-    const { roles, guildName } = await loadRolesForPermissionCheck(interaction);
+    const { roles, guildName, fromApi } = await loadRolesForPermissionCheck(interaction);
+    const needsRoleMenus = !fromApi;
 
-    if (!roles) {
-      const tip = rolesLoadFailedMessage(guildName);
-      if (plain) {
-        await interaction.reply({ content: tip, embeds: [], ephemeral });
-      } else {
-        await interaction.reply({
-          embeds: [fail(interaction.user, tip)],
-          ephemeral,
-        });
-      }
-      return;
-    }
-
-    // No permission yet — show picker; roles are already loaded for instant filter
     if (!raw?.trim()) {
-      const content = [
-        `**Permission → roles**`,
-        `Server: ${guildName}`,
-        `Ready to scan **${roles.length}** roles`,
-        '',
-        'Pick a permission from the dropdown.',
-      ].join('\n');
-
+      const content = buildPermissionPromptText(guildName, roles.length);
       await interaction.reply({
         ...(plain
           ? { content, embeds: [] }
           : {
+              content: needsRoleMenus ? content : undefined,
               embeds: [
-                fail(interaction.user, 'Pick a permission from the dropdown to see which roles have it.'),
+                fail(
+                  interaction.user,
+                  roles.length
+                    ? 'Pick a permission from the dropdown to see which roles have it.'
+                    : 'Pick a permission, then select roles from the menus (Discord lists every role).',
+                ),
               ],
             }),
-        components: [buildPermissionSelectRow(interaction.user.id, 0)],
+        components: buildPermissionRolesComponents(
+          interaction.user.id,
+          0,
+          undefined,
+          needsRoleMenus,
+        ),
         ephemeral,
       });
 
@@ -93,20 +84,18 @@ const command: Command = {
     const perm = findPermission(raw) ?? listAllPermissions().find((p) => p.key === raw) ?? null;
     if (!perm) {
       const tip = `Unknown permission \`${raw}\`. Use the dropdown or autocomplete to pick one.`;
-      if (plain) {
-        await interaction.reply({
-          content: tip,
-          embeds: [],
-          components: [buildPermissionSelectRow(interaction.user.id, 0)],
-          ephemeral,
-        });
-      } else {
-        await interaction.reply({
-          embeds: [fail(interaction.user, tip)],
-          components: [buildPermissionSelectRow(interaction.user.id, 0)],
-          ephemeral,
-        });
-      }
+      await interaction.reply({
+        ...(plain
+          ? { content: tip, embeds: [] }
+          : { embeds: [fail(interaction.user, tip)] }),
+        components: buildPermissionRolesComponents(
+          interaction.user.id,
+          0,
+          undefined,
+          needsRoleMenus,
+        ),
+        ephemeral,
+      });
       const message = await interaction.fetchReply();
       rememberPermissionRolesView(message.id, {
         ownerId: interaction.user.id,
@@ -122,18 +111,40 @@ const command: Command = {
     const all = listAllPermissions();
     const idx = all.findIndex((p) => p.key === perm.key);
     const permPage = Math.max(0, Math.floor(idx / 23));
+    const components = buildPermissionRolesComponents(
+      interaction.user.id,
+      permPage,
+      perm.key,
+      needsRoleMenus,
+    );
 
-    if (plain) {
-      await interaction.reply({
-        content: buildPermissionRolesText(perm, roles, guildName),
-        embeds: [],
-        components: [buildPermissionSelectRow(interaction.user.id, permPage, perm.key)],
-        ephemeral,
-      });
+    if (roles.length) {
+      if (plain || needsRoleMenus) {
+        await interaction.reply({
+          content: buildPermissionRolesText(perm, roles, guildName),
+          embeds: [],
+          components,
+          ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          embeds: [buildPermissionRolesEmbed(perm, roles, guildName)],
+          components,
+          ephemeral,
+        });
+      }
     } else {
+      const content = [
+        `**Roles with ${perm.label}**`,
+        `Server: ${guildName}`,
+        '',
+        'Discord lists **every role** in the menus below.',
+        'Select roles (up to 100 across the menus) — matching ones show here instantly.',
+      ].join('\n');
       await interaction.reply({
-        embeds: [buildPermissionRolesEmbed(perm, roles, guildName)],
-        components: [buildPermissionSelectRow(interaction.user.id, permPage, perm.key)],
+        content,
+        embeds: [],
+        components,
         ephemeral,
       });
     }
