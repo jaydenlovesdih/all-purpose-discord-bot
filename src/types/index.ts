@@ -19,6 +19,13 @@ export interface Command {
   permissions?: PermissionResolvable[];
   ownerOnly?: boolean;
   guildOnly?: boolean;
+  /**
+   * When true, this command is registered as a global slash command with
+   * User Install + Guild Install contexts (Add to My Apps).
+   */
+  userInstall?: boolean;
+  /** Skip botlock for this command (typical for user-install utilities). */
+  bypassBotLock?: boolean;
   execute: (interaction: ChatInputCommandInteraction, client: BotClient) => Promise<void>;
 }
 

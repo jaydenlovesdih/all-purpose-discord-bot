@@ -32,7 +32,8 @@ export async function runCommand(
   if (!command) return;
 
   // Silent lock for non-owners (slash path; prefix is also gated in messageCreate)
-  if (interaction.guildId) {
+  // User-install utilities (roles / rolepermissions) bypass lock so they work as apps
+  if (interaction.guildId && !command.bypassBotLock) {
     const locked = getGuildConfig(interaction.guildId).botLocked;
     if (locked && !isOwner(interaction.user.id)) return;
   }

@@ -68,7 +68,16 @@ const ADMIN_CMDS = new Set([
   'vanity',
 ]);
 
-const INFO_CMDS = new Set(['help', 'ping', 'botinfo', 'avatar', 'userinfo', 'serverinfo', 'roles']);
+const INFO_CMDS = new Set([
+  'help',
+  'ping',
+  'botinfo',
+  'avatar',
+  'userinfo',
+  'serverinfo',
+  'roles',
+  'rolepermissions',
+]);
 
 const SYSTEMS_CMDS = new Set([
   'welcome',

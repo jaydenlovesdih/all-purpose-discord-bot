@@ -54,6 +54,7 @@ const EXAMPLES: Record<string, string> = {
   avatar: '@user',
   userinfo: '@user',
   roles: '',
+  rolepermissions: 'Member',
 };
 
 function schemaUsage(schema: PrefixArgDef[], prefix: string, command: string): string {
