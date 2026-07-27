@@ -21,6 +21,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { BUILTIN_ALIASES, resolveAlias } from '../utils/aliases.js';
 import { enforceDnr } from '../utils/dnr.js';
 import { isOwner } from '../utils/permissions.js';
+import { handleTwitterAutoMessage } from '../utils/twitterVideo.js';
 
 export default {
   name: Events.MessageCreate,
@@ -61,6 +62,11 @@ export default {
         }
         break;
       }
+    }
+
+    // Twitter/X → permanent Discord video (before automod link filter can delete the message)
+    if (guildCfg.twitterVideo.enabled) {
+      await handleTwitterAutoMessage(message).catch(() => undefined);
     }
 
     if (await runAutoMod(message)) return;

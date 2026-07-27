@@ -84,6 +84,7 @@ const SYSTEMS_CMDS = new Set([
   'welcome',
   'levels',
   'starboard',
+  'twitter',
   'giveaway',
   'ticket',
   'afk',

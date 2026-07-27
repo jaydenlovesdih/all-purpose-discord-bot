@@ -171,6 +171,10 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'emoji', type: 'string' },
     { name: 'count', type: 'integer' },
   ],
+  twitter: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'url', type: 'rest' },
+  ],
   giveaway: [
     { name: 'duration', type: 'string', required: true },
     { name: 'prize', type: 'rest', required: true },

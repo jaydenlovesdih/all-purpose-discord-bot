@@ -93,6 +93,11 @@ export interface StarboardConfig {
   threshold: number;
 }
 
+export interface TwitterVideoConfig {
+  /** When true, auto-rehost Twitter/X videos posted in chat */
+  enabled: boolean;
+}
+
 export interface TicketChannelRecord {
   ownerId: string;
   number: number;
@@ -201,6 +206,7 @@ export interface GuildConfig {
   levels: LevelsConfig;
   welcome: WelcomeConfig;
   starboard: StarboardConfig;
+  twitterVideo: TwitterVideoConfig;
   tickets: TicketsConfig;
   logging: LoggingConfig;
   /**
@@ -321,6 +327,10 @@ const DEFAULT_STARBOARD: StarboardConfig = {
   threshold: 3,
 };
 
+const DEFAULT_TWITTER_VIDEO: TwitterVideoConfig = {
+  enabled: false,
+};
+
 const DEFAULT_TICKETS: TicketsConfig = {
   supportRoleIds: [],
   title: '🎫 Support Tickets',
@@ -359,6 +369,7 @@ function defaults(): GuildConfig {
     levels: { ...DEFAULT_LEVELS, rewards: [] },
     welcome: { ...DEFAULT_WELCOME, autoRoleIds: [] },
     starboard: { ...DEFAULT_STARBOARD },
+    twitterVideo: { ...DEFAULT_TWITTER_VIDEO },
     tickets: { ...DEFAULT_TICKETS, open: {}, supportRoleIds: [], types: [] },
     logging: { ...DEFAULT_LOGGING, events: { ...DEFAULT_LOGGING.events } },
     logChannels: {},
@@ -402,6 +413,7 @@ export function getGuildConfig(guildId: string): GuildConfig {
     levels: { ...DEFAULT_LEVELS, ...raw.levels },
     welcome: { ...DEFAULT_WELCOME, ...raw.welcome },
     starboard: { ...DEFAULT_STARBOARD, ...raw.starboard },
+    twitterVideo: { ...DEFAULT_TWITTER_VIDEO, ...raw.twitterVideo },
     tickets: {
       ...DEFAULT_TICKETS,
       ...raw.tickets,
