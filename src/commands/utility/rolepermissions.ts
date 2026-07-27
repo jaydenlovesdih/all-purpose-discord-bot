@@ -1,10 +1,9 @@
-import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
-import { fail, Colors } from '../../utils/embeds.js';
-import { resolveRole } from '../../utils/resolveRole.js';
+import { fail } from '../../utils/embeds.js';
 import {
-  formatRolePermissions,
-  resolveGuildForRoles,
+  buildRoleInfoEmbed,
+  resolveRoleFromInteraction,
   withUserInstall,
 } from '../../utils/userInstall.js';
 
@@ -13,11 +12,17 @@ const command: Command = {
     new SlashCommandBuilder()
       .setName('rolepermissions')
       .setDescription("Show a role's permissions (only you can see this)")
-      .addStringOption((opt) =>
+      .addRoleOption((opt) =>
         opt
           .setName('role')
-          .setDescription('Role mention, ID, or name (closest match)')
-          .setRequired(true),
+          .setDescription('Pick a role (works in any server via Add to My Apps)')
+          .setRequired(false),
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('query')
+          .setDescription('Or type a role ID / name (closest match) when the bot is in the server')
+          .setRequired(false),
       ),
   ),
   guildOnly: true,
@@ -27,31 +32,23 @@ const command: Command = {
     const isPrefix = 'commandMessage' in interaction;
     const ephemeral = !isPrefix;
 
-    const guild = await resolveGuildForRoles(interaction);
-    if (!guild) {
-      await interaction.reply({
-        embeds: [
-          fail(
-            interaction.user,
-            "I cannot see this server's roles. Add the bot **to this server** as well — user-install alone cannot read roles.",
-          ),
-        ],
-        ephemeral,
-      });
-      return;
-    }
-
-    const fromRole = interaction.options.getRole('role', false);
-    const roleInput = interaction.options.getString('role', false);
-    const resolved = fromRole ?? (roleInput ? resolveRole(guild, roleInput) : null);
-    const role = resolved ? guild.roles.cache.get(resolved.id) ?? null : null;
+    // Prefix schema still uses `role` as the role arg name
+    const role = await resolveRoleFromInteraction(interaction);
 
     if (!role) {
+      const attempted =
+        interaction.options.getString('query', false) ??
+        interaction.options.getString('role', false) ??
+        'that';
       await interaction.reply({
         embeds: [
           fail(
             interaction.user,
-            `No role matched \`${roleInput ?? 'that'}\` — try an ID, @mention, or closer name`,
+            [
+              `No role matched \`${attempted}\`.`,
+              '• Slash: use the **role picker** (works even if the bot is not in this server)',
+              '• Or pass a role ID / name when the bot is in the server',
+            ].join('\n'),
           ),
         ],
         ephemeral,
@@ -59,23 +56,15 @@ const command: Command = {
       return;
     }
 
-    const perms = formatRolePermissions(role.permissions);
-    const embed = new EmbedBuilder()
-      .setColor(role.color || Colors.success)
-      .setTitle(`🔐 Permissions — ${role.name}`)
-      .setDescription(perms)
-      .addFields(
-        { name: 'Role', value: `${role}`, inline: true },
-        { name: 'ID', value: `\`${role.id}\``, inline: true },
-        { name: 'Position', value: String(role.position), inline: true },
-        { name: 'Hoisted', value: role.hoist ? 'Yes' : 'No', inline: true },
-        { name: 'Mentionable', value: role.mentionable ? 'Yes' : 'No', inline: true },
-        { name: 'Managed', value: role.managed ? 'Yes (integration)' : 'No', inline: true },
-      )
-      .setFooter({ text: guild.name })
-      .setTimestamp();
+    const guildName =
+      interaction.guild?.name ??
+      interaction.client.guilds.cache.get(interaction.guildId!)?.name ??
+      undefined;
 
-    await interaction.reply({ embeds: [embed], ephemeral });
+    await interaction.reply({
+      embeds: [buildRoleInfoEmbed(role, guildName)],
+      ephemeral,
+    });
   },
 };
 

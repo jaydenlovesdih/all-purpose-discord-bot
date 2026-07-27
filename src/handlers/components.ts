@@ -31,7 +31,13 @@ import {
   buildCommandHelpSelect,
   extractSubcommands,
 } from '../utils/commandHelp.js';
-import { buildRolesButtons, buildRolesEmbed } from '../utils/rolesList.js';
+import {
+  buildRoleBrowseRow,
+  buildRoleInfoEmbed,
+  buildRolesListEmbed,
+  buildRolesNavButtons,
+  fetchGuildRolesApi,
+} from '../utils/userInstall.js';
 import { closeTicket, openTicket } from '../utils/tickets.js';
 import {
   applyRoleReaction,
@@ -269,17 +275,83 @@ export async function handleComponent(
       });
       return true;
     }
-    if (!interaction.guild) return true;
+    if (!interaction.guildId) return true;
 
     let page = Number(parts[3]) || 0;
     const dir = parts[2];
     if (dir === 'prev') page -= 1;
     if (dir === 'next') page += 1;
 
-    const { embed, page: safePage, totalPages } = buildRolesEmbed(interaction.guild, page);
+    const roles = await fetchGuildRolesApi(interaction);
+    if (!roles?.length) {
+      await interaction.update({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.success)
+            .setTitle('🎭 Roles')
+            .setDescription('Use the dropdown to browse roles — Discord fills it from this server.'),
+        ],
+        components: [buildRoleBrowseRow(interaction.user.id)],
+      });
+      return true;
+    }
+
+    const guildName =
+      interaction.guild?.name ??
+      interaction.client.guilds.cache.get(interaction.guildId)?.name ??
+      'this server';
+    const { embed, page: safePage, totalPages } = buildRolesListEmbed(roles, guildName, page);
     await interaction.update({
       embeds: [embed],
-      components: buildRolesButtons(safePage, totalPages, interaction.user.id),
+      components: [
+        buildRolesNavButtons(safePage, totalPages, interaction.user.id),
+        buildRoleBrowseRow(interaction.user.id),
+      ],
+    });
+    return true;
+  }
+
+  if (interaction.isRoleSelectMenu() && interaction.customId.startsWith('roles:pick:')) {
+    const ownerId = interaction.customId.split(':')[2];
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran roles can use this menu')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const selected = interaction.roles.first();
+    if (!selected) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'No role selected')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const roleLike = {
+      id: selected.id,
+      name: selected.name,
+      permissions:
+        typeof selected.permissions === 'object' && selected.permissions && 'bitfield' in selected.permissions
+          ? selected.permissions.bitfield.toString()
+          : String((selected as { permissions?: string }).permissions ?? '0'),
+      position: selected.position,
+      color: selected.color,
+      hoist: selected.hoist,
+      managed: selected.managed,
+      mentionable: selected.mentionable,
+    };
+
+    const guildName =
+      interaction.guild?.name ??
+      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
+      undefined;
+
+    await interaction.reply({
+      embeds: [buildRoleInfoEmbed(roleLike, guildName)],
+      ephemeral: true,
     });
     return true;
   }
