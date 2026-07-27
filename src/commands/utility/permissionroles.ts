@@ -2,9 +2,10 @@ import { SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
 import { fail } from '../../utils/embeds.js';
 import {
+  buildPermissionPromptText,
+  buildPermissionRolesComponents,
   buildPermissionRolesEmbed,
   buildPermissionRolesText,
-  buildPermissionSelectRow,
   findPermission,
   loadRolesForPermissionCheck,
   listAllPermissions,
@@ -40,44 +41,21 @@ const command: Command = {
       interaction.options.getString('permission', false) ??
       interaction.options.getString('value', false);
 
-    const loaded = await loadRolesForPermissionCheck(interaction);
-    if ('error' in loaded) {
-      if (plain) {
-        await interaction.reply({ content: loaded.error, embeds: [], ephemeral });
-        return;
-      }
-      await interaction.reply({
-        embeds: [fail(interaction.user, loaded.error)],
-        ephemeral,
-      });
-      return;
-    }
+    const { roles, guildName, fromApi } = await loadRolesForPermissionCheck(interaction);
 
-    const { roles, guildName } = loaded;
-
-    // No permission yet — show picker only
+    // No permission yet — show pickers
     if (!raw?.trim()) {
-      const content = plain
-        ? [
-            `**Permission → roles**`,
-            `Server: ${guildName}`,
-            '',
-            'Pick a permission from the dropdown to see which roles have it.',
-          ].join('\n')
-        : null;
-
+      const content = buildPermissionPromptText(guildName, fromApi);
       await interaction.reply({
         ...(plain
-          ? { content: content!, embeds: [] }
+          ? { content, embeds: [] }
           : {
+              content: fromApi ? undefined : content,
               embeds: [
-                fail(
-                  interaction.user,
-                  'Pick a permission from the dropdown to see which roles have it.',
-                ),
+                fail(interaction.user, 'Pick a permission from the dropdown to see which roles have it.'),
               ],
             }),
-        components: [buildPermissionSelectRow(interaction.user.id, 0)],
+        components: buildPermissionRolesComponents(interaction.user.id, 0, undefined, fromApi),
         ephemeral,
       });
 
@@ -88,6 +66,8 @@ const command: Command = {
         permPage: 0,
         plain,
         guildName,
+        roles,
+        fromApi,
       });
       return;
     }
@@ -99,13 +79,13 @@ const command: Command = {
         await interaction.reply({
           content: tip,
           embeds: [],
-          components: [buildPermissionSelectRow(interaction.user.id, 0)],
+          components: buildPermissionRolesComponents(interaction.user.id, 0, undefined, fromApi),
           ephemeral,
         });
       } else {
         await interaction.reply({
           embeds: [fail(interaction.user, tip)],
-          components: [buildPermissionSelectRow(interaction.user.id, 0)],
+          components: buildPermissionRolesComponents(interaction.user.id, 0, undefined, fromApi),
           ephemeral,
         });
       }
@@ -116,26 +96,39 @@ const command: Command = {
         permPage: 0,
         plain,
         guildName,
+        roles,
+        fromApi,
       });
       return;
     }
 
-    // Find which page the selected perm is on
     const all = listAllPermissions();
     const idx = all.findIndex((p) => p.key === perm.key);
     const permPage = Math.max(0, Math.floor(idx / 23));
+    const opts = { fromApi, scannedCount: roles.length };
 
-    if (plain) {
-      await interaction.reply({
-        content: buildPermissionRolesText(perm, roles, guildName),
-        embeds: [],
-        components: [buildPermissionSelectRow(interaction.user.id, permPage, perm.key)],
-        ephemeral,
-      });
+    if (fromApi) {
+      if (plain) {
+        await interaction.reply({
+          content: buildPermissionRolesText(perm, roles, guildName, opts),
+          embeds: [],
+          components: buildPermissionRolesComponents(interaction.user.id, permPage, perm.key, fromApi),
+          ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          embeds: [buildPermissionRolesEmbed(perm, roles, guildName, opts)],
+          components: buildPermissionRolesComponents(interaction.user.id, permPage, perm.key, fromApi),
+          ephemeral,
+        });
+      }
     } else {
+      // No API list yet — permission chosen; wait for Role Select (Discord lists every role)
+      const content = buildPermissionPromptText(guildName, false, perm.label);
       await interaction.reply({
-        embeds: [buildPermissionRolesEmbed(perm, roles, guildName)],
-        components: [buildPermissionSelectRow(interaction.user.id, permPage, perm.key)],
+        content,
+        embeds: [],
+        components: buildPermissionRolesComponents(interaction.user.id, permPage, perm.key, false),
         ephemeral,
       });
     }
@@ -147,6 +140,8 @@ const command: Command = {
       permPage,
       plain,
       guildName,
+      roles,
+      fromApi,
     });
   },
 };

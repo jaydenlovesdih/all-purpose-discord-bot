@@ -32,26 +32,32 @@ import {
   extractSubcommands,
 } from '../utils/commandHelp.js';
 import {
+  buildCollectedRolesText,
   buildRoleBrowseRow,
   buildRoleInfoEmbed,
   buildRoleInfoText,
   buildRolePermComponents,
+  buildRolesBrowseActions,
   buildRolesListEmbed,
   buildRolesListText,
   buildRolesNavButtons,
   fetchGuildRolesApi,
   pendingRolePermViews,
+  pendingRolesBrowseViews,
   rememberRolePermView,
+  rememberRolesBrowseView,
   roleLikeFromSelect,
   wantsPlainRoleReply,
   type RolePermViewMode,
 } from '../utils/userInstall.js';
 import {
+  buildPermissionPromptText,
+  buildPermissionRolesComponents,
   buildPermissionRolesEmbed,
   buildPermissionRolesText,
-  buildPermissionSelectRow,
   listAllPermissions,
   loadRolesForPermissionCheck,
+  mergeRoleLikes,
   pendingPermissionRolesViews,
   rememberPermissionRolesView,
 } from '../utils/permissionRoles.js';
@@ -355,6 +361,88 @@ export async function handleComponent(
     return true;
   }
 
+  if (interaction.isRoleSelectMenu() && interaction.customId.startsWith('roles:list:')) {
+    const ownerId = interaction.customId.split(':')[2];
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran roles can use this menu')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const existing = pendingRolesBrowseViews.get(interaction.message.id);
+    const plain = existing?.plain ?? wantsPlainRoleReply(interaction);
+    const guildName =
+      existing?.guildName ??
+      interaction.guild?.name ??
+      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
+      'this server';
+
+    const byId = new Map((existing?.collected ?? []).map((r) => [r.id, r]));
+    for (const selected of interaction.roles.values()) {
+      byId.set(selected.id, roleLikeFromSelect(selected));
+    }
+    const collected = [...byId.values()].sort((a, b) => b.position - a.position);
+
+    rememberRolesBrowseView(interaction.message.id, {
+      ownerId: existing?.ownerId ?? interaction.user.id,
+      plain,
+      guildName,
+      collected,
+    });
+
+    const { content } = buildCollectedRolesText(collected, guildName, 0);
+    await interaction.update({
+      content,
+      embeds: [],
+      components: [
+        buildRoleBrowseRow(interaction.user.id, { multi: true }),
+        buildRoleBrowseRow(interaction.user.id),
+        buildRolesBrowseActions(interaction.user.id),
+      ],
+    });
+    return true;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('roles:clear:')) {
+    const ownerId = interaction.customId.split(':')[2];
+    if (ownerId && ownerId !== interaction.user.id) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran roles can use this button')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const existing = pendingRolesBrowseViews.get(interaction.message.id);
+    const plain = existing?.plain ?? wantsPlainRoleReply(interaction);
+    const guildName =
+      existing?.guildName ??
+      interaction.guild?.name ??
+      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
+      'this server';
+
+    rememberRolesBrowseView(interaction.message.id, {
+      ownerId: existing?.ownerId ?? interaction.user.id,
+      plain,
+      guildName,
+      collected: [],
+    });
+
+    const { content } = buildCollectedRolesText([], guildName, 0);
+    await interaction.update({
+      content,
+      embeds: [],
+      components: [
+        buildRoleBrowseRow(interaction.user.id, { multi: true }),
+        buildRoleBrowseRow(interaction.user.id),
+        buildRolesBrowseActions(interaction.user.id),
+      ],
+    });
+    return true;
+  }
+
   if (interaction.isRoleSelectMenu() && interaction.customId.startsWith('roles:pick:')) {
     const ownerId = interaction.customId.split(':')[2];
     if (ownerId && ownerId !== interaction.user.id) {
@@ -374,19 +462,7 @@ export async function handleComponent(
       return true;
     }
 
-    const roleLike = {
-      id: selected.id,
-      name: selected.name,
-      permissions:
-        typeof selected.permissions === 'object' && selected.permissions && 'bitfield' in selected.permissions
-          ? selected.permissions.bitfield.toString()
-          : String((selected as { permissions?: string }).permissions ?? '0'),
-      position: selected.position,
-      color: selected.color,
-      hoist: selected.hoist,
-      managed: selected.managed,
-      mentionable: selected.mentionable,
-    };
+    const roleLike = roleLikeFromSelect(selected);
 
     const guildName =
       interaction.guild?.name ??
@@ -472,6 +548,7 @@ export async function handleComponent(
     }
 
     await interaction.update({
+      content: '',
       embeds: [buildRoleInfoEmbed(roleLike, guildName ?? existing?.guildName, mode)],
       components: buildRolePermComponents(viewOwner, mode),
     });
@@ -492,9 +569,11 @@ export async function handleComponent(
     }
 
     const pending = pendingRolePermViews.get(interaction.message.id);
-    if (!pending) {
+    if (!pending?.role) {
       await interaction.reply({
-        content: 'This permission view expired — run the command again.',
+        content: pending
+          ? 'Pick a role from the dropdown first.'
+          : 'This permission view expired — run the command again.',
         ephemeral: true,
       });
       return true;
@@ -548,16 +627,13 @@ export async function handleComponent(
     }
 
     const loaded = await loadRolesForPermissionCheck(interaction);
-    if ('error' in loaded) {
-      await interaction.update({
-        content: plain ? loaded.error : undefined,
-        embeds: plain ? [] : [fail(interaction.user, loaded.error)],
-        components: [buildPermissionSelectRow(ownerId ?? interaction.user.id, permPage, permissionKey || undefined)],
-      });
-      return true;
-    }
-
-    const { roles, guildName } = loaded;
+    const fromApi = pending?.fromApi ?? loaded.fromApi;
+    const roles = fromApi
+      ? loaded.roles.length
+        ? loaded.roles
+        : pending?.roles ?? []
+      : pending?.roles ?? [];
+    const guildName = pending?.guildName ?? loaded.guildName;
     const viewOwner = pending?.ownerId ?? interaction.user.id;
 
     rememberPermissionRolesView(interaction.message.id, {
@@ -566,51 +642,55 @@ export async function handleComponent(
       permPage,
       plain,
       guildName,
+      roles,
+      fromApi,
     });
 
-    // Navigation only — keep current results (or prompt) and refresh the dropdown page
+    const components = buildPermissionRolesComponents(
+      viewOwner,
+      permPage,
+      permissionKey || undefined,
+      fromApi,
+    );
+
+    // Navigation only
     if (value === 'nav:prev' || value === 'nav:next') {
       if (!permissionKey) {
+        const content = buildPermissionPromptText(guildName, fromApi);
         await interaction.update({
-          content: plain
-            ? [
-                `**Permission → roles**`,
-                `Server: ${guildName}`,
-                '',
-                'Pick a permission from the dropdown to see which roles have it.',
-              ].join('\n')
-            : undefined,
-          embeds: plain
-            ? []
-            : [
-                fail(
-                  interaction.user,
-                  'Pick a permission from the dropdown to see which roles have it.',
-                ),
-              ],
-          components: [buildPermissionSelectRow(viewOwner, permPage)],
+          content: plain || !fromApi ? content : undefined,
+          embeds: plain || !fromApi ? [] : [fail(interaction.user, 'Pick a permission from the dropdown.')],
+          components,
         });
         return true;
       }
 
       const perm = listAllPermissions().find((p) => p.key === permissionKey);
       if (!perm) {
+        await interaction.update({ components });
+        return true;
+      }
+
+      if (!fromApi && roles.length === 0) {
         await interaction.update({
-          components: [buildPermissionSelectRow(viewOwner, permPage)],
+          content: buildPermissionPromptText(guildName, false, perm.label),
+          embeds: [],
+          components,
         });
         return true;
       }
 
-      if (plain) {
+      const opts = { fromApi, scannedCount: roles.length };
+      if (plain || !fromApi) {
         await interaction.update({
-          content: buildPermissionRolesText(perm, roles, guildName),
+          content: buildPermissionRolesText(perm, roles, guildName, opts),
           embeds: [],
-          components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+          components,
         });
       } else {
         await interaction.update({
-          embeds: [buildPermissionRolesEmbed(perm, roles, guildName)],
-          components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+          embeds: [buildPermissionRolesEmbed(perm, roles, guildName, opts)],
+          components,
         });
       }
       return true;
@@ -626,18 +706,102 @@ export async function handleComponent(
       return true;
     }
 
-    if (plain) {
+    if (!fromApi && roles.length === 0) {
       await interaction.update({
-        content: buildPermissionRolesText(perm, roles, guildName),
+        content: buildPermissionPromptText(guildName, false, perm.label),
         embeds: [],
-        components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+        components,
+      });
+      return true;
+    }
+
+    const opts = { fromApi, scannedCount: roles.length };
+    if (plain || !fromApi) {
+      await interaction.update({
+        content: buildPermissionRolesText(perm, roles, guildName, opts),
+        embeds: [],
+        components,
       });
     } else {
       await interaction.update({
-        embeds: [buildPermissionRolesEmbed(perm, roles, guildName)],
-        components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+        content: '',
+        embeds: [buildPermissionRolesEmbed(perm, roles, guildName, opts)],
+        components,
       });
     }
+    return true;
+  }
+
+  if (interaction.isRoleSelectMenu() && interaction.customId.startsWith('permroles:roles:')) {
+    const ownerId = interaction.customId.split(':')[2];
+    if (ownerId && ownerId !== interaction.user.id && !canBypass(interaction.user.id)) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran the command can use this menu')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const pending = pendingPermissionRolesViews.get(interaction.message.id);
+    const plain = pending?.plain ?? wantsPlainRoleReply(interaction);
+    const guildName =
+      pending?.guildName ??
+      interaction.guild?.name ??
+      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
+      'this server';
+    const viewOwner = pending?.ownerId ?? interaction.user.id;
+    const permissionKey = pending?.permissionKey ?? '';
+    const permPage = pending?.permPage ?? 0;
+
+    const incoming = [...interaction.roles.values()].map((r) => roleLikeFromSelect(r));
+    const roles = mergeRoleLikes(pending?.roles ?? [], incoming);
+
+    rememberPermissionRolesView(interaction.message.id, {
+      ownerId: viewOwner,
+      permissionKey,
+      permPage,
+      plain,
+      guildName,
+      roles,
+      fromApi: false,
+    });
+
+    const components = buildPermissionRolesComponents(
+      viewOwner,
+      permPage,
+      permissionKey || undefined,
+      false,
+    );
+
+    if (!permissionKey) {
+      await interaction.update({
+        content: [
+          buildPermissionPromptText(guildName, false),
+          '',
+          `Checked **${roles.length}** role${roles.length === 1 ? '' : 's'} so far — pick a permission above.`,
+        ].join('\n'),
+        embeds: [],
+        components,
+      });
+      return true;
+    }
+
+    const perm = listAllPermissions().find((p) => p.key === permissionKey);
+    if (!perm) {
+      await interaction.update({
+        content: 'Pick a permission from the first dropdown.',
+        embeds: [],
+        components,
+      });
+      return true;
+    }
+
+    const opts = { fromApi: false, scannedCount: roles.length };
+    await interaction.update({
+      content: buildPermissionRolesText(perm, roles, guildName, opts),
+      embeds: [],
+      components,
+    });
     return true;
   }
 

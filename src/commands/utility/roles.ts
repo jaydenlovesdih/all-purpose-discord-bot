@@ -1,12 +1,14 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
-import { fail } from '../../utils/embeds.js';
 import {
+  buildCollectedRolesText,
   buildRoleBrowseRow,
+  buildRolesBrowseActions,
   buildRolesListEmbed,
   buildRolesListText,
   buildRolesNavButtons,
   fetchGuildRolesApi,
+  rememberRolesBrowseView,
   wantsPlainRoleReply,
   withUserInstall,
 } from '../../utils/userInstall.js';
@@ -62,31 +64,28 @@ const command: Command = {
       return;
     }
 
-    // No API list (bot not in server) — role select still works via Discord client
-    if (plain) {
-      await interaction.reply({
-        content: [
-          `**Roles — ${guildName}**`,
-          '',
-          'Use the dropdown below to browse roles.',
-          'Discord fills it from this server on your client — pick one to see permissions.',
-        ].join('\n'),
-        embeds: [],
-        components: [buildRoleBrowseRow(interaction.user.id)],
-        ephemeral,
-      });
-      return;
-    }
+    // Bot not in server — Discord still fills Role Select with every role on the client.
+    // Multi-select pins up to 25 roles per pick into a text list (repeat to add more).
+    const { content } = buildCollectedRolesText([], guildName, 0);
+    const components = [
+      buildRoleBrowseRow(interaction.user.id, { multi: true }),
+      buildRoleBrowseRow(interaction.user.id),
+      buildRolesBrowseActions(interaction.user.id),
+    ];
 
     await interaction.reply({
-      embeds: [
-        fail(
-          interaction.user,
-          'Use the **dropdown** to browse roles (Discord fills it from this server). Pick one to see permissions.',
-        ),
-      ],
-      components: [buildRoleBrowseRow(interaction.user.id)],
+      content,
+      embeds: [],
+      components,
       ephemeral,
+    });
+
+    const message = await interaction.fetchReply();
+    rememberRolesBrowseView(message.id, {
+      ownerId: interaction.user.id,
+      plain,
+      guildName,
+      collected: [],
     });
   },
 };

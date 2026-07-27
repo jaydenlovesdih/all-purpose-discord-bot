@@ -37,27 +37,81 @@ const command: Command = {
     const ephemeral = !isPrefix;
     const plain = wantsPlainRoleReply(interaction);
 
+    const roleOpt = interaction.options.getRole('role', false);
+    const query = interaction.options.getString('query', false);
     const role = await resolveRoleFromInteraction(interaction);
 
+    // No role yet — still send the dropdown (same idea as /permissionroles)
+    if (!role && !roleOpt && !query?.trim()) {
+      const guildName =
+        interaction.guild?.name ??
+        interaction.client.guilds.cache.get(interaction.guildId!)?.name ??
+        'this server';
+      const prompt = [
+        `**Role permissions — ${guildName}**`,
+        '',
+        'Pick a role from the dropdown to see its permissions.',
+      ].join('\n');
+
+      const components = buildRolePermComponents(interaction.user.id, 'danger', {
+        includeFilter: false,
+        pickPlaceholder: 'Select a role…',
+      });
+
+      if (plain) {
+        await interaction.reply({ content: prompt, embeds: [], components, ephemeral });
+      } else {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Pick a role from the dropdown to see its permissions.')],
+          components,
+          ephemeral,
+        });
+      }
+
+      const message = await interaction.fetchReply();
+      rememberRolePermView(message.id, {
+        ownerId: interaction.user.id,
+        role: null,
+        guildName,
+        plain,
+        mode: 'danger',
+      });
+      return;
+    }
+
     if (!role) {
-      const attempted =
-        interaction.options.getString('query', false) ??
-        interaction.options.getString('role', false) ??
-        'that';
+      const attempted = query ?? 'that';
       const tip = [
         `No role matched \`${attempted}\`.`,
-        '• Use the **role picker** (works even if the bot is not in this server)',
+        '• Use the **role picker** below (works even if the bot is not in this server)',
         '• Or pass a role ID / name when the bot is in the server',
       ].join('\n');
 
+      const components = buildRolePermComponents(interaction.user.id, 'danger', {
+        includeFilter: false,
+        pickPlaceholder: 'Select a role…',
+      });
+
       if (plain) {
-        await interaction.reply({ content: tip, embeds: [], ephemeral });
-        return;
+        await interaction.reply({ content: tip, embeds: [], components, ephemeral });
+      } else {
+        await interaction.reply({
+          embeds: [fail(interaction.user, tip)],
+          components,
+          ephemeral,
+        });
       }
 
-      await interaction.reply({
-        embeds: [fail(interaction.user, tip)],
-        ephemeral,
+      const message = await interaction.fetchReply();
+      rememberRolePermView(message.id, {
+        ownerId: interaction.user.id,
+        role: null,
+        guildName:
+          interaction.guild?.name ??
+          interaction.client.guilds.cache.get(interaction.guildId!)?.name ??
+          undefined,
+        plain,
+        mode: 'danger',
       });
       return;
     }

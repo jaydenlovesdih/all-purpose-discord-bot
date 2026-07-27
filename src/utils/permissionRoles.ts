@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   PermissionFlagsBits,
   PermissionsBitField,
+  RoleSelectMenuBuilder,
   StringSelectMenuBuilder,
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
@@ -20,14 +21,16 @@ export interface PermissionChoice {
   bit: bigint;
 }
 
-export type RolePermCheckMode = 'roles'; // reserved if we add more views later
-
 export interface PendingPermissionRolesView {
   ownerId: string;
   permissionKey: string;
   permPage: number;
   plain: boolean;
   guildName?: string | null;
+  /** Roles available to filter — from API or collected via Role Select */
+  roles: RoleLike[];
+  /** True when roles came from GET /guilds/:id/roles (bot in server) */
+  fromApi: boolean;
 }
 
 export const pendingPermissionRolesViews = new Map<string, PendingPermissionRolesView>();
@@ -56,7 +59,9 @@ export function findPermission(input: string): PermissionChoice | null {
   if (exactKey) return exactKey;
 
   const exactLabel = all.find(
-    (p) => p.label.toLowerCase() === input.trim().toLowerCase() || p.label.toLowerCase().replace(/\s+/g, '') === q,
+    (p) =>
+      p.label.toLowerCase() === input.trim().toLowerCase() ||
+      p.label.toLowerCase().replace(/\s+/g, '') === q,
   );
   if (exactLabel) return exactLabel;
 
@@ -159,10 +164,39 @@ export function buildPermissionSelectRow(
   );
 }
 
+/** Discord fills this with every role — used when we can't GET guild roles via API. */
+export function buildPermissionRoleScanRow(
+  ownerId: string,
+): ActionRowBuilder<RoleSelectMenuBuilder> {
+  return new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
+    new RoleSelectMenuBuilder()
+      .setCustomId(`permroles:roles:${ownerId}`)
+      .setPlaceholder('Select roles to check (lists every role)')
+      .setMinValues(1)
+      .setMaxValues(25),
+  );
+}
+
+export function buildPermissionRolesComponents(
+  ownerId: string,
+  permPage: number,
+  selectedKey: string | undefined,
+  fromApi: boolean,
+): ActionRowBuilder<StringSelectMenuBuilder | RoleSelectMenuBuilder>[] {
+  const rows: ActionRowBuilder<StringSelectMenuBuilder | RoleSelectMenuBuilder>[] = [
+    buildPermissionSelectRow(ownerId, permPage, selectedKey),
+  ];
+  if (!fromApi) {
+    rows.push(buildPermissionRoleScanRow(ownerId));
+  }
+  return rows;
+}
+
 export function buildPermissionRolesEmbed(
   perm: PermissionChoice,
   roles: RoleLike[],
   guildName: string,
+  opts?: { scannedCount?: number; fromApi?: boolean },
 ): EmbedBuilder {
   const matching = roles.filter((r) => roleHasPermission(r, perm));
   const list = matching.length
@@ -172,15 +206,18 @@ export function buildPermissionRolesEmbed(
         .join('\n')
     : '_No roles have this permission._';
 
-  // Embed description max 4096
   const desc = list.length > 3900 ? `${list.slice(0, 3900)}\n… _(truncated)_` : list;
+  const scanned = opts?.scannedCount ?? roles.length;
+  const footerExtra = opts?.fromApi
+    ? `${guildName} · ${matching.length} role${matching.length === 1 ? '' : 's'}`
+    : `${guildName} · ${matching.length} match · ${scanned} role${scanned === 1 ? '' : 's'} checked`;
 
   return new EmbedBuilder()
     .setColor(Colors.success)
     .setTitle(`Roles with ${perm.label}`)
     .setDescription(desc)
     .setFooter({
-      text: `${guildName} · ${matching.length} role${matching.length === 1 ? '' : 's'} · Use the dropdown to switch`,
+      text: `${footerExtra} · Use the dropdown to switch`,
     })
     .setTimestamp();
 }
@@ -189,6 +226,7 @@ export function buildPermissionRolesText(
   perm: PermissionChoice,
   roles: RoleLike[],
   guildName: string,
+  opts?: { scannedCount?: number; fromApi?: boolean },
 ): string {
   const matching = roles
     .filter((r) => roleHasPermission(r, perm))
@@ -198,20 +236,64 @@ export function buildPermissionRolesText(
     ? matching.map((r, i) => `${i + 1}. <@&${r.id}> — \`${r.id}\``).join('\n')
     : '(no roles have this permission)';
 
+  const scanned = opts?.scannedCount ?? roles.length;
+  const countLine = opts?.fromApi
+    ? `${matching.length} role${matching.length === 1 ? '' : 's'}`
+    : `${matching.length} match · ${scanned} role${scanned === 1 ? '' : 's'} checked`;
+
   let text = [
     `**Roles with ${perm.label}**`,
     `Server: ${guildName}`,
-    `${matching.length} role${matching.length === 1 ? '' : 's'}`,
+    countLine,
     '',
     body,
     '',
-    '_Use the dropdown to switch permission._',
+    opts?.fromApi
+      ? '_Use the dropdown to switch permission._'
+      : '_Select more roles below to check them. Discord lists every role._',
   ].join('\n');
 
   if (text.length > 1900) {
     text = `${text.slice(0, 1900)}\n… _(truncated)_`;
   }
   return text;
+}
+
+export function buildPermissionPromptText(
+  guildName: string,
+  fromApi: boolean,
+  permissionLabel?: string,
+): string {
+  if (!permissionLabel) {
+    return [
+      `**Permission → roles**`,
+      `Server: ${guildName}`,
+      '',
+      'Pick a permission from the dropdown.',
+      fromApi
+        ? null
+        : 'Then select roles from the second dropdown — Discord lists every role in this server.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  if (fromApi) {
+    return [
+      `**Roles with ${permissionLabel}**`,
+      `Server: ${guildName}`,
+      '',
+      'Loading…',
+    ].join('\n');
+  }
+
+  return [
+    `**Roles with ${permissionLabel}**`,
+    `Server: ${guildName}`,
+    '',
+    'Select roles from the dropdown below — Discord lists **every role**.',
+    'Matching roles will show here. Select up to 25 at a time; repeat to check more.',
+  ].join('\n');
 }
 
 export function rememberPermissionRolesView(
@@ -224,19 +306,26 @@ export function rememberPermissionRolesView(
 
 export async function loadRolesForPermissionCheck(
   interaction: ChatInputCommandInteraction | import('discord.js').MessageComponentInteraction,
-): Promise<{ roles: RoleLike[]; guildName: string } | { error: string }> {
-  const roles = await fetchGuildRolesApi(interaction);
-  if (!roles?.length) {
-    return {
-      error:
-        'I cannot load this server\'s roles. The bot must be **in this server** to check which roles have a permission.',
-    };
-  }
+): Promise<{ roles: RoleLike[]; guildName: string; fromApi: boolean }> {
   const guildName =
     interaction.guild?.name ??
     interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
     'this server';
-  return { roles, guildName };
+
+  const roles = await fetchGuildRolesApi(interaction);
+  if (roles?.length) {
+    return { roles, guildName, fromApi: true };
+  }
+
+  return { roles: [], guildName, fromApi: false };
+}
+
+export function mergeRoleLikes(existing: RoleLike[], incoming: RoleLike[]): RoleLike[] {
+  const byId = new Map(existing.map((r) => [r.id, r]));
+  for (const role of incoming) {
+    byId.set(role.id, role);
+  }
+  return [...byId.values()].sort((a, b) => b.position - a.position);
 }
 
 export { wantsPlainRoleReply };

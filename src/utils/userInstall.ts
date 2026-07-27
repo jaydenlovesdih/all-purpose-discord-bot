@@ -50,6 +50,22 @@ export function wantsPlainRoleReply(
   return isUserInstallInteraction(interaction);
 }
 
+function mapApiRoles(raw: APIRole[], guildId: string): RoleLike[] {
+  return raw
+    .filter((r) => r.id !== guildId)
+    .sort((a, b) => b.position - a.position)
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      permissions: r.permissions,
+      position: r.position,
+      color: r.color,
+      hoist: r.hoist,
+      managed: r.managed,
+      mentionable: r.mentionable,
+    }));
+}
+
 /** Fetch all guild roles via REST (works when the bot is a member). */
 export async function fetchGuildRolesApi(source: {
   client: ChatInputCommandInteraction['client'];
@@ -57,7 +73,18 @@ export async function fetchGuildRolesApi(source: {
 }): Promise<RoleLike[] | null> {
   if (!source.guildId) return null;
 
-  const cached = source.client.guilds.cache.get(source.guildId);
+  // Prefer REST so user-install interactions still get a full list when the bot is in the guild
+  try {
+    const raw = (await source.client.rest.get(Routes.guildRoles(source.guildId))) as APIRole[];
+    return mapApiRoles(raw, source.guildId);
+  } catch {
+    // fall through to cache / fetch
+  }
+
+  let cached = source.client.guilds.cache.get(source.guildId);
+  if (!cached) {
+    cached = (await source.client.guilds.fetch(source.guildId).catch(() => null)) ?? undefined;
+  }
   if (cached) {
     if (cached.roles.cache.size <= 1) {
       await cached.roles.fetch().catch(() => undefined);
@@ -78,24 +105,7 @@ export async function fetchGuildRolesApi(source: {
       }));
   }
 
-  try {
-    const raw = (await source.client.rest.get(Routes.guildRoles(source.guildId))) as APIRole[];
-    return raw
-      .filter((r) => r.id !== source.guildId)
-      .sort((a, b) => b.position - a.position)
-      .map((r) => ({
-        id: r.id,
-        name: r.name,
-        permissions: r.permissions,
-        position: r.position,
-        color: r.color,
-        hoist: r.hoist,
-        managed: r.managed,
-        mentionable: r.mentionable,
-      }));
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 /**
@@ -241,7 +251,8 @@ export type RolePermViewMode = 'all' | 'danger';
 
 export interface PendingRolePermView {
   ownerId: string;
-  role: RoleLike;
+  /** Null until the user picks a role from the dropdown. */
+  role: RoleLike | null;
   guildName?: string | null;
   plain: boolean;
   mode: RolePermViewMode;
@@ -322,11 +333,14 @@ export function buildRolePermFilterRow(
   );
 }
 
-export function buildRolePermChangeRow(ownerId: string): ActionRowBuilder<RoleSelectMenuBuilder> {
+export function buildRolePermChangeRow(
+  ownerId: string,
+  placeholder = 'Change role…',
+): ActionRowBuilder<RoleSelectMenuBuilder> {
   return new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
     new RoleSelectMenuBuilder()
       .setCustomId(`roleperms:pick:${ownerId}`)
-      .setPlaceholder('Change role…')
+      .setPlaceholder(placeholder)
       .setMinValues(1)
       .setMaxValues(1),
   );
@@ -335,8 +349,15 @@ export function buildRolePermChangeRow(ownerId: string): ActionRowBuilder<RoleSe
 export function buildRolePermComponents(
   ownerId: string,
   mode: RolePermViewMode,
+  opts?: { includeFilter?: boolean; pickPlaceholder?: string },
 ): ActionRowBuilder<ButtonBuilder | RoleSelectMenuBuilder>[] {
-  return [buildRolePermChangeRow(ownerId), buildRolePermFilterRow(ownerId, mode)];
+  const rows: ActionRowBuilder<ButtonBuilder | RoleSelectMenuBuilder>[] = [
+    buildRolePermChangeRow(ownerId, opts?.pickPlaceholder),
+  ];
+  if (opts?.includeFilter !== false) {
+    rows.push(buildRolePermFilterRow(ownerId, mode));
+  }
+  return rows;
 }
 
 export function roleLikeFromSelect(
@@ -364,14 +385,71 @@ export function rememberRolePermView(messageId: string, view: PendingRolePermVie
   setTimeout(() => pendingRolePermViews.delete(messageId), 15 * 60_000);
 }
 
-export function buildRoleBrowseRow(ownerId: string): ActionRowBuilder<RoleSelectMenuBuilder> {
+export interface PendingRolesBrowseView {
+  ownerId: string;
+  plain: boolean;
+  guildName: string;
+  /** Roles collected via Role Select when the bot cannot GET /guilds/:id/roles */
+  collected: RoleLike[];
+}
+
+export const pendingRolesBrowseViews = new Map<string, PendingRolesBrowseView>();
+
+export function rememberRolesBrowseView(messageId: string, view: PendingRolesBrowseView): void {
+  pendingRolesBrowseViews.set(messageId, view);
+  setTimeout(() => pendingRolesBrowseViews.delete(messageId), 15 * 60_000);
+}
+
+/** Single-select: inspect one role. Multi-select: pin up to 25 roles into the list. */
+export function buildRoleBrowseRow(
+  ownerId: string,
+  opts?: { multi?: boolean },
+): ActionRowBuilder<RoleSelectMenuBuilder> {
+  const multi = opts?.multi ?? false;
   return new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
     new RoleSelectMenuBuilder()
-      .setCustomId(`roles:pick:${ownerId}`)
-      .setPlaceholder('Pick a role to view')
+      .setCustomId(multi ? `roles:list:${ownerId}` : `roles:pick:${ownerId}`)
+      .setPlaceholder(multi ? 'Select roles to list (up to 25)' : 'Pick a role to view')
       .setMinValues(1)
-      .setMaxValues(1),
+      .setMaxValues(multi ? 25 : 1),
   );
+}
+
+export function buildRolesBrowseActions(ownerId: string): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`roles:clear:${ownerId}`)
+      .setLabel('Clear list')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+export function buildCollectedRolesText(
+  roles: RoleLike[],
+  guildName: string,
+  page: number,
+): { content: string; page: number; totalPages: number } {
+  if (roles.length === 0) {
+    return {
+      content: [
+        `**Roles — ${guildName}**`,
+        '',
+        'Discord fills the dropdown with **every role** in this server.',
+        'Select up to 25 at a time to pin them into this list (repeat to add more).',
+        'Use the second dropdown to inspect one role’s permissions.',
+      ].join('\n'),
+      page: 0,
+      totalPages: 1,
+    };
+  }
+
+  const sorted = [...roles].sort((a, b) => b.position - a.position);
+  const built = buildRolesListText(sorted, guildName, page);
+  return {
+    content: `${built.content}\n\n_Select more roles above to add them (up to 25 per pick)._`,
+    page: built.page,
+    totalPages: built.totalPages,
+  };
 }
 
 export function buildRolesListEmbed(
