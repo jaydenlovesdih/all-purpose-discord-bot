@@ -18,6 +18,7 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
   clearsnipe: [],
   roles: [],
   rolepermissions: [{ name: 'role', type: 'role', required: true }],
+  permissionroles: [{ name: 'permission', type: 'string' }],
   userinfo: [{ name: 'user', type: 'user' }],
   avatar: [{ name: 'user', type: 'user' }],
   ban: [

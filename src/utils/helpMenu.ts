@@ -77,6 +77,7 @@ const INFO_CMDS = new Set([
   'serverinfo',
   'roles',
   'rolepermissions',
+  'permissionroles',
 ]);
 
 const SYSTEMS_CMDS = new Set([

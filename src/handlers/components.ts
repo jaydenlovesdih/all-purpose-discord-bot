@@ -46,6 +46,15 @@ import {
   wantsPlainRoleReply,
   type RolePermViewMode,
 } from '../utils/userInstall.js';
+import {
+  buildPermissionRolesEmbed,
+  buildPermissionRolesText,
+  buildPermissionSelectRow,
+  listAllPermissions,
+  loadRolesForPermissionCheck,
+  pendingPermissionRolesViews,
+  rememberPermissionRolesView,
+} from '../utils/permissionRoles.js';
 import { closeTicket, openTicket } from '../utils/tickets.js';
 import {
   applyRoleReaction,
@@ -508,6 +517,127 @@ export async function handleComponent(
       embeds: [buildRoleInfoEmbed(pending.role, pending.guildName, mode)],
       components: buildRolePermComponents(pending.ownerId, mode),
     });
+    return true;
+  }
+
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('permroles:pick:')) {
+    const ownerId = interaction.customId.split(':')[2];
+    if (ownerId && ownerId !== interaction.user.id && !canBypass(interaction.user.id)) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran the command can use this menu')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    const value = interaction.values[0];
+    const pending = pendingPermissionRolesViews.get(interaction.message.id);
+    const plain = pending?.plain ?? wantsPlainRoleReply(interaction);
+    let permPage = pending?.permPage ?? 0;
+    let permissionKey = pending?.permissionKey ?? '';
+
+    if (value === 'nav:prev') {
+      permPage = Math.max(0, permPage - 1);
+    } else if (value === 'nav:next') {
+      permPage += 1;
+    } else if (value.startsWith('perm:')) {
+      permissionKey = value.slice('perm:'.length);
+      const all = listAllPermissions();
+      const idx = all.findIndex((p) => p.key === permissionKey);
+      if (idx >= 0) permPage = Math.floor(idx / 23);
+    }
+
+    const loaded = await loadRolesForPermissionCheck(interaction);
+    if ('error' in loaded) {
+      await interaction.update({
+        content: plain ? loaded.error : undefined,
+        embeds: plain ? [] : [fail(interaction.user, loaded.error)],
+        components: [buildPermissionSelectRow(ownerId ?? interaction.user.id, permPage, permissionKey || undefined)],
+      });
+      return true;
+    }
+
+    const { roles, guildName } = loaded;
+    const viewOwner = pending?.ownerId ?? interaction.user.id;
+
+    rememberPermissionRolesView(interaction.message.id, {
+      ownerId: viewOwner,
+      permissionKey,
+      permPage,
+      plain,
+      guildName,
+    });
+
+    // Navigation only — keep current results (or prompt) and refresh the dropdown page
+    if (value === 'nav:prev' || value === 'nav:next') {
+      if (!permissionKey) {
+        await interaction.update({
+          content: plain
+            ? [
+                `**Permission → roles**`,
+                `Server: ${guildName}`,
+                '',
+                'Pick a permission from the dropdown to see which roles have it.',
+              ].join('\n')
+            : undefined,
+          embeds: plain
+            ? []
+            : [
+                fail(
+                  interaction.user,
+                  'Pick a permission from the dropdown to see which roles have it.',
+                ),
+              ],
+          components: [buildPermissionSelectRow(viewOwner, permPage)],
+        });
+        return true;
+      }
+
+      const perm = listAllPermissions().find((p) => p.key === permissionKey);
+      if (!perm) {
+        await interaction.update({
+          components: [buildPermissionSelectRow(viewOwner, permPage)],
+        });
+        return true;
+      }
+
+      if (plain) {
+        await interaction.update({
+          content: buildPermissionRolesText(perm, roles, guildName),
+          embeds: [],
+          components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+        });
+      } else {
+        await interaction.update({
+          embeds: [buildPermissionRolesEmbed(perm, roles, guildName)],
+          components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+        });
+      }
+      return true;
+    }
+
+    // Permission chosen
+    const perm = listAllPermissions().find((p) => p.key === permissionKey);
+    if (!perm) {
+      await interaction.reply({
+        content: 'Unknown permission selected.',
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (plain) {
+      await interaction.update({
+        content: buildPermissionRolesText(perm, roles, guildName),
+        embeds: [],
+        components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+      });
+    } else {
+      await interaction.update({
+        embeds: [buildPermissionRolesEmbed(perm, roles, guildName)],
+        components: [buildPermissionSelectRow(viewOwner, permPage, perm.key)],
+      });
+    }
     return true;
   }
 

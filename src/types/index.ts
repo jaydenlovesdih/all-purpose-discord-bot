@@ -26,6 +26,10 @@ export interface Command {
   userInstall?: boolean;
   /** Skip botlock for this command (typical for user-install utilities). */
   bypassBotLock?: boolean;
+  autocomplete?: (
+    interaction: import('discord.js').AutocompleteInteraction,
+    client: BotClient,
+  ) => Promise<void>;
   execute: (interaction: ChatInputCommandInteraction, client: BotClient) => Promise<void>;
 }
 

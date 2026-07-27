@@ -55,6 +55,7 @@ const EXAMPLES: Record<string, string> = {
   userinfo: '@user',
   roles: '',
   rolepermissions: 'Member',
+  permissionroles: 'ManageGuild',
 };
 
 function schemaUsage(schema: PrefixArgDef[], prefix: string, command: string): string {
