@@ -221,13 +221,20 @@ export function formatPermissionNames(
 
 export function formatRolePermissions(
   permissions: PermissionResolvable | string,
-  opts?: { dangerousOnly?: boolean },
+  opts?: { dangerousOnly?: boolean; small?: boolean },
 ): string {
   const names = formatPermissionNames(permissions, opts);
   if (!names.length) {
-    return opts?.dangerousOnly ? '_No dangerous permissions_' : '_No permissions_';
+    const empty = opts?.dangerousOnly ? '• (none dangerous)' : '• (none)';
+    return opts?.small ? `-# ${empty}` : empty;
   }
-  return names.map((p) => `• ${p}`).join('\n');
+  return names
+    .map((p) => {
+      const line = `• ${p}`;
+      // Discord subtext — used for the full permission dump so it stays scannable
+      return opts?.small ? `-# ${line}` : line;
+    })
+    .join('\n');
 }
 
 export type RolePermViewMode = 'all' | 'danger';
@@ -245,14 +252,19 @@ export const pendingRolePermViews = new Map<string, PendingRolePermView>();
 export function buildRoleInfoEmbed(
   role: RoleLike,
   guildName?: string | null,
-  mode: RolePermViewMode = 'all',
+  mode: RolePermViewMode = 'danger',
 ): EmbedBuilder {
   const dangerousOnly = mode === 'danger';
   const color = role.color || Colors.success;
   return new EmbedBuilder()
     .setColor(color)
     .setTitle(`Permissions — ${role.name}`)
-    .setDescription(formatRolePermissions(role.permissions, { dangerousOnly }))
+    .setDescription(
+      formatRolePermissions(role.permissions, {
+        dangerousOnly,
+        small: !dangerousOnly,
+      }),
+    )
     .addFields(
       { name: 'Role', value: `<@&${role.id}>`, inline: true },
       { name: 'ID', value: `\`${role.id}\``, inline: true },
@@ -271,15 +283,13 @@ export function buildRoleInfoEmbed(
 export function buildRoleInfoText(
   role: RoleLike,
   guildName?: string | null,
-  mode: RolePermViewMode = 'all',
+  mode: RolePermViewMode = 'danger',
 ): string {
   const dangerousOnly = mode === 'danger';
-  const perms = formatPermissionNames(role.permissions, { dangerousOnly });
-  const permBlock = perms.length
-    ? perms.map((p) => `• ${p}`).join('\n')
-    : dangerousOnly
-      ? '• (none dangerous)'
-      : '• (none)';
+  const permBlock = formatRolePermissions(role.permissions, {
+    dangerousOnly,
+    small: !dangerousOnly,
+  });
 
   const lines = [
     `**${role.name}**`,
@@ -288,7 +298,7 @@ export function buildRoleInfoText(
     `ID: \`${role.id}\``,
     `Position: ${role.position} · Hoisted: ${role.hoist ? 'yes' : 'no'} · Mentionable: ${role.mentionable ? 'yes' : 'no'} · Managed: ${role.managed ? 'yes' : 'no'}`,
     '',
-    dangerousOnly ? '**Dangerous permissions**' : '**Permissions**',
+    dangerousOnly ? '**Dangerous permissions**' : '**All permissions**',
     permBlock,
   ].filter((l) => l !== null) as string[];
 

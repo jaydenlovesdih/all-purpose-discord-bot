@@ -67,18 +67,18 @@ const command: Command = {
       interaction.client.guilds.cache.get(interaction.guildId!)?.name ??
       undefined;
 
-    const filterRow = buildRolePermFilterRow(interaction.user.id, 'all');
+    const filterRow = buildRolePermFilterRow(interaction.user.id, 'danger');
 
     if (plain) {
       await interaction.reply({
-        content: buildRoleInfoText(role, guildName, 'all'),
+        content: buildRoleInfoText(role, guildName, 'danger'),
         embeds: [],
         components: [filterRow],
         ephemeral,
       });
     } else {
       await interaction.reply({
-        embeds: [buildRoleInfoEmbed(role, guildName, 'all')],
+        embeds: [buildRoleInfoEmbed(role, guildName, 'danger')],
         components: [filterRow],
         ephemeral,
       });
@@ -90,7 +90,7 @@ const command: Command = {
       role,
       guildName,
       plain,
-      mode: 'all',
+      mode: 'danger',
     });
   },
 };

@@ -385,9 +385,9 @@ export async function handleComponent(
 
     if (wantsPlainRoleReply(interaction)) {
       await interaction.reply({
-        content: buildRoleInfoText(roleLike, guildName, 'all'),
+        content: buildRoleInfoText(roleLike, guildName, 'danger'),
         embeds: [],
-        components: [buildRolePermFilterRow(interaction.user.id, 'all')],
+        components: [buildRolePermFilterRow(interaction.user.id, 'danger')],
         ephemeral: true,
       });
       const message = await interaction.fetchReply();
@@ -396,14 +396,14 @@ export async function handleComponent(
         role: roleLike,
         guildName,
         plain: true,
-        mode: 'all',
+        mode: 'danger',
       });
       return true;
     }
 
     await interaction.reply({
-      embeds: [buildRoleInfoEmbed(roleLike, guildName, 'all')],
-      components: [buildRolePermFilterRow(interaction.user.id, 'all')],
+      embeds: [buildRoleInfoEmbed(roleLike, guildName, 'danger')],
+      components: [buildRolePermFilterRow(interaction.user.id, 'danger')],
       ephemeral: true,
     });
     const message = await interaction.fetchReply();
@@ -412,7 +412,7 @@ export async function handleComponent(
       role: roleLike,
       guildName,
       plain: false,
-      mode: 'all',
+      mode: 'danger',
     });
     return true;
   }
