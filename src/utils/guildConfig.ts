@@ -100,6 +100,8 @@ export interface TwitterVideoConfig {
   includeText: boolean;
   /** When true, delete the original message that contained the Twitter/X link */
   deleteOriginal: boolean;
+  /** When true, send conversion logs to logChannelId */
+  logging: boolean;
   /** Channel where conversions are logged (Twitter URL + Discord message link) */
   logChannelId?: string;
 }
@@ -337,6 +339,7 @@ const DEFAULT_TWITTER_VIDEO: TwitterVideoConfig = {
   enabled: false,
   includeText: false,
   deleteOriginal: true,
+  logging: true,
 };
 
 const DEFAULT_TICKETS: TicketsConfig = {

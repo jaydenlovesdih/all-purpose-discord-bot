@@ -9,7 +9,6 @@ import {
   extractTweetIds,
   fetchTweetMedia,
   logTwitterConversion,
-  shouldSkipRecent,
 } from '../../utils/twitterVideo.js';
 import { wantsPlainRoleReply, withUserInstall } from '../../utils/userInstall.js';
 
@@ -105,6 +104,7 @@ const command: Command = {
         `Auto-convert: **${cfg.enabled ? 'on' : 'off'}**`,
         `Post text with video: **${cfg.includeText ? 'on' : 'off'}** (default off — video only)`,
         `Delete original link: **${cfg.deleteOriginal !== false ? 'on' : 'off'}**`,
+        `Logging: **${cfg.logging !== false ? 'on' : 'off'}**`,
         `Log channel: ${cfg.logChannelId ? `<#${cfg.logChannelId}>` : '_not set_'}`,
         '',
         'Auto: deletes the Twitter link, uploads the video, logs to the log channel.',
@@ -171,11 +171,40 @@ const command: Command = {
       if (!(await requireManage())) return;
 
       const channelOpt = interaction.options.getChannel('channel');
-      // Prefix: `twitter log #channel` or `twitter log clear` via url/rest
+      // Prefix: `twitter log #channel` | `twitter log on/off` | `twitter log clear`
       const rest = url.trim();
-      const clear = ['clear', 'none', 'off', 'remove'].includes(rest.toLowerCase());
+      const restLower = rest.toLowerCase();
 
-      if (clear) {
+      if (['off', 'disable', 'disabled'].includes(restLower)) {
+        mutateGuildConfig(guildId, (c) => {
+          c.twitterVideo.logging = false;
+        });
+        const msg = 'Twitter logging disabled.';
+        if (plain) {
+          await interaction.reply({ content: msg, embeds: [], ephemeral });
+        } else {
+          await interaction.reply({ embeds: [successEmbed(msg)], ephemeral });
+        }
+        return;
+      }
+
+      if (['on', 'enable', 'enabled'].includes(restLower)) {
+        mutateGuildConfig(guildId, (c) => {
+          c.twitterVideo.logging = true;
+        });
+        const ch = getGuildConfig(guildId).twitterVideo.logChannelId;
+        const msg = ch
+          ? `Twitter logging enabled → <#${ch}>.`
+          : 'Twitter logging enabled — set a channel with `twitter log #channel`.';
+        if (plain) {
+          await interaction.reply({ content: msg, embeds: [], ephemeral });
+        } else {
+          await interaction.reply({ embeds: [successEmbed(msg)], ephemeral });
+        }
+        return;
+      }
+
+      if (['clear', 'none', 'remove'].includes(restLower)) {
         mutateGuildConfig(guildId, (c) => {
           delete c.twitterVideo.logChannelId;
         });
@@ -195,7 +224,8 @@ const command: Command = {
       }
 
       if (!channelId) {
-        const tip = 'Set a log channel: `twitter log #channel` (or `twitter log clear`).';
+        const tip =
+          'Usage: `twitter log #channel` · `twitter log on` · `twitter log off` · `twitter log clear`';
         if (plain) {
           await interaction.reply({ content: tip, embeds: [], ephemeral: true });
         } else {
@@ -206,6 +236,7 @@ const command: Command = {
 
       mutateGuildConfig(guildId, (c) => {
         c.twitterVideo.logChannelId = channelId;
+        c.twitterVideo.logging = true;
       });
       const msg = `Twitter conversions will be logged in <#${channelId}>.`;
       if (plain) {
@@ -250,7 +281,6 @@ const command: Command = {
     let failed = 0;
 
     for (const id of ids.slice(0, 3)) {
-      if (shouldSkipRecent(guildId, id)) continue;
       const media = await fetchTweetMedia(id);
       if (!media) {
         failed += 1;

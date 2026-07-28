@@ -219,6 +219,7 @@ export async function logTwitterConversion(
     sourceUserTag?: string;
   },
 ): Promise<void> {
+  if (cfg.logging === false) return;
   if (!cfg.logChannelId) return;
 
   const channel = await guild.channels.fetch(cfg.logChannelId).catch(() => null);
@@ -233,23 +234,6 @@ export async function logTwitterConversion(
   ].filter(Boolean);
 
   await channel.send({ content: lines.join('\n') }).catch(() => undefined);
-}
-
-/** In-memory dedupe so auto + manual don't double-post the same tweet quickly. */
-const recentPosts = new Map<string, number>();
-
-export function shouldSkipRecent(guildId: string, tweetId: string): boolean {
-  const key = `${guildId}:${tweetId}`;
-  const last = recentPosts.get(key) ?? 0;
-  if (Date.now() - last < 60_000) return true;
-  recentPosts.set(key, Date.now());
-  if (recentPosts.size > 500) {
-    const cutoff = Date.now() - 120_000;
-    for (const [k, t] of recentPosts) {
-      if (t < cutoff) recentPosts.delete(k);
-    }
-  }
-  return false;
 }
 
 function channelPerms(message: Message, me: NonNullable<Guild['members']['me']>) {
@@ -276,11 +260,8 @@ export async function handleTwitterAutoMessage(message: Message): Promise<boolea
   }
 
   let posted = false;
-  let deletedSource = false;
 
   for (const id of ids.slice(0, 2)) {
-    if (shouldSkipRecent(message.guild.id, id)) continue;
-
     const media = await fetchTweetMedia(id).catch(() => null);
     if (!media?.videos.length) continue;
 
@@ -316,10 +297,8 @@ export async function handleTwitterAutoMessage(message: Message): Promise<boolea
       message.author.id === me?.id;
     if (canDelete) {
       await message.delete().catch(() => undefined);
-      deletedSource = true;
     }
   }
 
-  void deletedSource;
   return posted;
 }
