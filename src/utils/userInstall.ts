@@ -555,7 +555,7 @@ export function buildRolesListText(
     '',
     body,
     '',
-    '_Use Next/Prev to browse · dropdown to inspect one role._',
+    '_Use Next / Prev to browse roles._',
   ].join('\n');
 
   return { content, page: safePage, totalPages };

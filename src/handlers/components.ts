@@ -36,15 +36,12 @@ import {
   buildRoleInfoEmbed,
   buildRoleInfoText,
   buildRolePermComponents,
-  buildRolesBootstrapText,
   buildRolesListEmbed,
   buildRolesListText,
-  buildRolesPageComponents,
+  buildRolesNavButtons,
   fetchGuildRolesApi,
   pendingRolePermViews,
-  pendingRolesBrowseViews,
   rememberRolePermView,
-  rememberRolesBrowseView,
   roleLikeFromSelect,
   wantsPlainRoleReply,
   type RolePermViewMode,
@@ -82,7 +79,6 @@ import {
   isAnnounceRunning,
   pendingAnnounces,
 } from '../utils/announceDm.js';
-import { getCachedGuildRoles } from '../utils/permissionRoles.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -311,20 +307,9 @@ export async function handleComponent(
     if (dir === 'prev') page -= 1;
     if (dir === 'next') page += 1;
 
-    const pending = pendingRolesBrowseViews.get(interaction.message.id);
-    let roles = (await fetchGuildRolesApi(interaction)) ?? [];
-    let fromApi = roles.length > 0;
-    if (!roles.length) {
-      roles = getCachedGuildRoles(interaction.guildId);
-    }
-    if (!roles.length && pending?.collected.length) {
-      roles = pending.collected;
-      fromApi = pending.fromApi;
-    }
-
-    const plain = pending?.plain ?? wantsPlainRoleReply(interaction);
+    const roles = (await fetchGuildRolesApi(interaction)) ?? [];
+    const plain = wantsPlainRoleReply(interaction);
     const guildName =
-      pending?.guildName ??
       interaction.guild?.name ??
       interaction.client.guilds.cache.get(interaction.guildId)?.name ??
       'this server';
@@ -334,18 +319,9 @@ export async function handleComponent(
       null;
 
     if (!roles.length) {
-      const bootstrap = buildRolesBootstrapText(guildName);
       await interaction.update({
-        content: plain ? bootstrap : undefined,
-        embeds: plain
-          ? []
-          : [
-              new EmbedBuilder()
-                .setColor(Colors.success)
-                .setTitle(`Roles — ${guildName}`)
-                .setDescription(bootstrap.split('\n\n').slice(1).join('\n\n')),
-            ],
-        components: [buildRoleBrowseRow(interaction.user.id, { multi: true })],
+        embeds: [fail(interaction.user, 'Could not load roles for this server.')],
+        components: [],
       });
       return true;
     }
@@ -355,17 +331,7 @@ export async function handleComponent(
       await interaction.update({
         content,
         embeds: [],
-        components: buildRolesPageComponents(safePage, totalPages, interaction.user.id, {
-          loadMore: !fromApi,
-        }),
-      });
-      rememberRolesBrowseView(interaction.message.id, {
-        ownerId: pending?.ownerId ?? interaction.user.id,
-        plain,
-        guildName,
-        collected: roles,
-        fromApi,
-        page: safePage,
+        components: [buildRolesNavButtons(safePage, totalPages, interaction.user.id)],
       });
       return true;
     }
@@ -378,121 +344,7 @@ export async function handleComponent(
     );
     await interaction.update({
       embeds: [embed],
-      components: buildRolesPageComponents(safePage, totalPages, interaction.user.id, {
-        loadMore: !fromApi,
-      }),
-    });
-    rememberRolesBrowseView(interaction.message.id, {
-      ownerId: pending?.ownerId ?? interaction.user.id,
-      plain,
-      guildName,
-      collected: roles,
-      fromApi,
-      page: safePage,
-    });
-    return true;
-  }
-
-  if (interaction.isRoleSelectMenu() && interaction.customId.startsWith('roles:list:')) {
-    const ownerId = interaction.customId.split(':')[2];
-    if (ownerId && ownerId !== interaction.user.id) {
-      await interaction.reply({
-        embeds: [fail(interaction.user, 'Only the person who ran roles can use this menu')],
-        ephemeral: true,
-      });
-      return true;
-    }
-
-    const existing = pendingRolesBrowseViews.get(interaction.message.id);
-    const plain = existing?.plain ?? wantsPlainRoleReply(interaction);
-    const guildName =
-      existing?.guildName ??
-      interaction.guild?.name ??
-      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
-      'this server';
-
-    const byId = new Map((existing?.collected ?? []).map((r) => [r.id, r]));
-    for (const selected of interaction.roles.values()) {
-      byId.set(selected.id, roleLikeFromSelect(selected));
-    }
-    const collected = [...byId.values()].sort((a, b) => b.position - a.position);
-    cacheGuildRoles(interaction.guildId, collected);
-
-    const guildIcon =
-      interaction.guild?.iconURL({ size: 256 }) ??
-      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.iconURL({ size: 256 }) ??
-      null;
-
-    rememberRolesBrowseView(interaction.message.id, {
-      ownerId: existing?.ownerId ?? interaction.user.id,
-      plain,
-      guildName,
-      collected,
-      fromApi: false,
-      page: 0,
-    });
-
-    if (plain) {
-      const { content, page, totalPages } = buildRolesListText(collected, guildName, 0);
-      await interaction.update({
-        content,
-        embeds: [],
-        components: buildRolesPageComponents(page, totalPages, interaction.user.id, {
-          loadMore: true,
-        }),
-      });
-      return true;
-    }
-
-    const { embed, page, totalPages } = buildRolesListEmbed(collected, guildName, 0, guildIcon);
-    await interaction.update({
-      embeds: [embed],
-      components: buildRolesPageComponents(page, totalPages, interaction.user.id, {
-        loadMore: true,
-      }),
-    });
-    return true;
-  }
-
-  if (interaction.isButton() && interaction.customId.startsWith('roles:clear:')) {
-    const ownerId = interaction.customId.split(':')[2];
-    if (ownerId && ownerId !== interaction.user.id) {
-      await interaction.reply({
-        embeds: [fail(interaction.user, 'Only the person who ran roles can use this button')],
-        ephemeral: true,
-      });
-      return true;
-    }
-
-    const existing = pendingRolesBrowseViews.get(interaction.message.id);
-    const plain = existing?.plain ?? wantsPlainRoleReply(interaction);
-    const guildName =
-      existing?.guildName ??
-      interaction.guild?.name ??
-      interaction.client.guilds.cache.get(interaction.guildId ?? '')?.name ??
-      'this server';
-
-    rememberRolesBrowseView(interaction.message.id, {
-      ownerId: existing?.ownerId ?? interaction.user.id,
-      plain,
-      guildName,
-      collected: [],
-      fromApi: false,
-      page: 0,
-    });
-
-    const bootstrap = buildRolesBootstrapText(guildName);
-    await interaction.update({
-      content: plain ? bootstrap : undefined,
-      embeds: plain
-        ? []
-        : [
-            new EmbedBuilder()
-              .setColor(Colors.success)
-              .setTitle(`Roles — ${guildName}`)
-              .setDescription(bootstrap.split('\n\n').slice(1).join('\n\n')),
-          ],
-      components: [buildRoleBrowseRow(interaction.user.id, { multi: true })],
+      components: [buildRolesNavButtons(safePage, totalPages, interaction.user.id)],
     });
     return true;
   }
