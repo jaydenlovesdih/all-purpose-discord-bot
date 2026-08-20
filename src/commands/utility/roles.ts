@@ -1,14 +1,13 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { Command } from '../../types/index.js';
+import { fail } from '../../utils/embeds.js';
+import { getCachedGuildRoles } from '../../utils/permissionRoles.js';
 import {
-  buildCollectedRolesText,
   buildRoleBrowseRow,
-  buildRolesBrowseActions,
   buildRolesListEmbed,
   buildRolesListText,
   buildRolesNavButtons,
   fetchGuildRolesApi,
-  rememberRolesBrowseView,
   wantsPlainRoleReply,
   withUserInstall,
 } from '../../utils/userInstall.js';
@@ -17,7 +16,7 @@ const command: Command = {
   data: withUserInstall(
     new SlashCommandBuilder()
       .setName('roles')
-      .setDescription('List / browse server roles (only you can see this)'),
+      .setDescription('List server roles 10 at a time (only you can see this)'),
   ),
   guildOnly: true,
   userInstall: true,
@@ -35,26 +34,29 @@ const command: Command = {
       interaction.client.guilds.cache.get(interaction.guildId!)?.iconURL({ size: 256 }) ??
       null;
 
-    const roles = await fetchGuildRolesApi(interaction);
+    let roles = (await fetchGuildRolesApi(interaction)) ?? [];
+    if (!roles.length) {
+      roles = getCachedGuildRoles(interaction.guildId);
+    }
 
-    if (roles?.length) {
-      if (plain) {
-        const { content, page, totalPages } = buildRolesListText(roles, guildName, 0);
-        await interaction.reply({
-          content,
-          embeds: [],
-          components: [
-            buildRolesNavButtons(page, totalPages, interaction.user.id),
-            buildRoleBrowseRow(interaction.user.id),
-          ],
-          ephemeral,
-        });
-        return;
-      }
-
-      const { embed, page, totalPages } = buildRolesListEmbed(roles, guildName, 0, guildIcon);
+    if (!roles.length) {
       await interaction.reply({
-        embeds: [embed],
+        embeds: [
+          fail(
+            interaction.user,
+            'Could not load roles for this server. Invite the bot here to use `/roles`, or use `/rolepermissions` to inspect one role via the dropdown.',
+          ),
+        ],
+        ephemeral,
+      });
+      return;
+    }
+
+    if (plain) {
+      const { content, page, totalPages } = buildRolesListText(roles, guildName, 0);
+      await interaction.reply({
+        content,
+        embeds: [],
         components: [
           buildRolesNavButtons(page, totalPages, interaction.user.id),
           buildRoleBrowseRow(interaction.user.id),
@@ -64,28 +66,14 @@ const command: Command = {
       return;
     }
 
-    // Bot not in server — Discord still fills Role Select with every role on the client.
-    // Multi-select pins up to 25 roles per pick into a text list (repeat to add more).
-    const { content } = buildCollectedRolesText([], guildName, 0);
-    const components = [
-      buildRoleBrowseRow(interaction.user.id, { multi: true }),
-      buildRoleBrowseRow(interaction.user.id),
-      buildRolesBrowseActions(interaction.user.id),
-    ];
-
+    const { embed, page, totalPages } = buildRolesListEmbed(roles, guildName, 0, guildIcon);
     await interaction.reply({
-      content,
-      embeds: [],
-      components,
+      embeds: [embed],
+      components: [
+        buildRolesNavButtons(page, totalPages, interaction.user.id),
+        buildRoleBrowseRow(interaction.user.id),
+      ],
       ephemeral,
-    });
-
-    const message = await interaction.fetchReply();
-    rememberRolesBrowseView(message.id, {
-      ownerId: interaction.user.id,
-      plain,
-      guildName,
-      collected: [],
     });
   },
 };

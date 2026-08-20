@@ -66,6 +66,7 @@ const ADMIN_CMDS = new Set([
   'docs',
   'allowserver',
   'vanity',
+  'announce',
 ]);
 
 const INFO_CMDS = new Set([

@@ -153,6 +153,10 @@ export const prefixSchemas: Record<string, PrefixArgDef[]> = {
     { name: 'subcommand', type: 'string', required: true },
     { name: 'value', type: 'string' },
   ],
+  announce: [
+    { name: 'subcommand', type: 'string', required: true },
+    { name: 'message', type: 'rest' },
+  ],
   vanity: [{ name: 'code', type: 'string' }],
   snipe: [{ name: 'index', type: 'integer' }],
   editsnipe: [{ name: 'index', type: 'integer' }],

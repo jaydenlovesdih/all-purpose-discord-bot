@@ -1,6 +1,7 @@
 import { createClient } from './client.js';
 import { config } from './config.js';
 import { loadCommands, loadEvents } from './handlers/loader.js';
+import { destroyDmBots, initDmBots } from './utils/dmBots.js';
 import { flushStore, initStore } from './utils/store.js';
 
 async function main(): Promise<void> {
@@ -12,12 +13,14 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     await flushStore().catch(() => undefined);
+    await destroyDmBots().catch(() => undefined);
     process.exit(0);
   };
   process.once('SIGINT', () => void shutdown());
   process.once('SIGTERM', () => void shutdown());
 
-  client.login(config.token);
+  await client.login(config.token);
+  await initDmBots(client);
 }
 
 main().catch((error) => {

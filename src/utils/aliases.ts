@@ -34,6 +34,7 @@ export const BUILTIN_ALIASES: Record<string, string> = {
   n: 'nuke',
   bl: 'botlock',
   serverlock: 'botlock',
+  ann: 'announce',
 };
 
 export function resolveAlias(

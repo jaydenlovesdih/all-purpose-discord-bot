@@ -67,30 +67,40 @@ function mapApiRoles(raw: APIRole[], guildId: string): RoleLike[] {
 }
 
 /** Fetch all guild roles via REST (works when the bot is a member). */
-export async function fetchGuildRolesApi(source: {
-  client: ChatInputCommandInteraction['client'];
-  guildId: string | null;
-}): Promise<RoleLike[] | null> {
-  if (!source.guildId) return null;
+export async function fetchGuildRolesApi(
+  source:
+    | {
+        client: ChatInputCommandInteraction['client'];
+        guildId: string | null;
+        guild?: Guild | null;
+      }
+    | ChatInputCommandInteraction
+    | import('discord.js').MessageComponentInteraction,
+): Promise<RoleLike[] | null> {
+  const client = source.client;
+  const guildId = source.guildId;
+  if (!guildId) return null;
+
+  const interactionGuild = 'guild' in source ? source.guild : null;
 
   // Prefer REST so user-install interactions still get a full list when the bot is in the guild
   try {
-    const raw = (await source.client.rest.get(Routes.guildRoles(source.guildId))) as APIRole[];
-    return mapApiRoles(raw, source.guildId);
+    const raw = (await client.rest.get(Routes.guildRoles(guildId))) as APIRole[];
+    return mapApiRoles(raw, guildId);
   } catch {
     // fall through to cache / fetch
   }
 
-  let cached = source.client.guilds.cache.get(source.guildId);
+  let cached = client.guilds.cache.get(guildId) ?? interactionGuild ?? null;
   if (!cached) {
-    cached = (await source.client.guilds.fetch(source.guildId).catch(() => null)) ?? undefined;
+    cached = (await client.guilds.fetch(guildId).catch(() => null)) ?? null;
   }
   if (cached) {
     if (cached.roles.cache.size <= 1) {
       await cached.roles.fetch().catch(() => undefined);
     }
     return [...cached.roles.cache.values()]
-      .filter((r) => r.id !== cached.id)
+      .filter((r) => r.id !== cached!.id)
       .sort((a, b) => b.position - a.position)
       .map((r) => ({
         id: r.id,
@@ -427,29 +437,29 @@ export function buildRolesBrowseActions(ownerId: string): ActionRowBuilder<Butto
 export function buildCollectedRolesText(
   roles: RoleLike[],
   guildName: string,
-  page: number,
-): { content: string; page: number; totalPages: number } {
+): { content: string } {
   if (roles.length === 0) {
     return {
       content: [
         `**Roles — ${guildName}**`,
         '',
-        'Discord fills the dropdown with **every role** in this server.',
-        'Select up to 25 at a time to pin them into this list (repeat to add more).',
-        'Use the second dropdown to inspect one role’s permissions.',
+        'Open the menu below — Discord lists **every role** in this server.',
+        'Select up to **25 roles** per pick; repeat until all roles appear here.',
+        '',
+        '_Or invite the bot to this server for an instant full list._',
       ].join('\n'),
-      page: 0,
-      totalPages: 1,
     };
   }
 
   const sorted = [...roles].sort((a, b) => b.position - a.position);
-  const built = buildRolesListText(sorted, guildName, page);
-  return {
-    content: `${built.content}\n\n_Select more roles above to add them (up to 25 per pick)._`,
-    page: built.page,
-    totalPages: built.totalPages,
-  };
+  const chunks = buildFullRolesPlainChunks(sorted, guildName);
+  let content = chunks[0];
+  if (chunks.length > 1) {
+    content += `\n\n_${sorted.length} roles total — list truncated here. Invite the bot for one-shot full list._`;
+  }
+  content += '\n\n_Select more roles above if any are missing (25 per pick)._';
+
+  return { content: content.length > 2000 ? `${content.slice(0, 1990)}…` : content };
 }
 
 export function buildRolesListEmbed(
@@ -514,7 +524,7 @@ export function buildRolesListText(
     '',
     body,
     '',
-    '_Use the dropdown to inspect a role._',
+    '_Use Next/Prev to browse · dropdown to inspect one role._',
   ].join('\n');
 
   return { content, page: safePage, totalPages };
@@ -539,6 +549,89 @@ export function buildRolesNavButtons(
       .setStyle(ButtonStyle.Success)
       .setDisabled(page >= totalPages - 1),
   );
+}
+
+const ROLES_PER_EMBED = 30;
+const MAX_EMBEDS = 10;
+
+function roleLinePlain(role: RoleLike, index: number): string {
+  return `${index + 1}. <@&${role.id}> — \`${role.id}\``;
+}
+
+function roleLineEmbed(role: RoleLike, index: number): string {
+  const hex =
+    role.hexColor ?? (role.color ? `#${role.color.toString(16).padStart(6, '0')}` : 'default');
+  return `**${index + 1}.** <@&${role.id}> — \`${role.id}\`\n┗ ${hex}`;
+}
+
+/** Plain-text chunks for the full role list (user-install / My Apps). */
+export function buildFullRolesPlainChunks(roles: RoleLike[], guildName: string): string[] {
+  if (!roles.length) {
+    return [`**Roles — ${guildName}**\n(no roles)`];
+  }
+
+  const header = `**Roles — ${guildName}** · ${roles.length} total\n\n`;
+  const chunks: string[] = [];
+  let current = header;
+
+  for (let i = 0; i < roles.length; i++) {
+    const line = roleLinePlain(roles[i], i);
+    if (current.length + line.length + 1 > 1950) {
+      chunks.push(current.trimEnd());
+      current = '';
+    }
+    current += `${line}\n`;
+  }
+
+  if (current.trim()) chunks.push(current.trimEnd());
+  return chunks;
+}
+
+/** Embed list for the full role list (guild / prefix). */
+export function buildFullRolesEmbeds(
+  roles: RoleLike[],
+  guildName: string,
+  guildIcon?: string | null,
+): EmbedBuilder[] {
+  if (!roles.length) {
+    return [
+      new EmbedBuilder()
+        .setColor(Colors.success)
+        .setTitle(`Roles — ${guildName}`)
+        .setDescription('_No roles._')
+        .setTimestamp(),
+    ];
+  }
+
+  const embeds: EmbedBuilder[] = [];
+  for (let offset = 0; offset < roles.length && embeds.length < MAX_EMBEDS; offset += ROLES_PER_EMBED) {
+    const slice = roles.slice(offset, offset + ROLES_PER_EMBED);
+    const body = slice.map((role, i) => roleLineEmbed(role, offset + i)).join('\n');
+    const embed = new EmbedBuilder()
+      .setColor(Colors.success)
+      .setTitle(embeds.length === 0 ? `Roles — ${guildName}` : `Roles — ${guildName} (cont.)`)
+      .setDescription(body)
+      .setTimestamp();
+
+    if (embeds.length === 0 && guildIcon) {
+      embed.setThumbnail(guildIcon);
+    }
+
+    embeds.push(embed);
+  }
+
+  const shown = Math.min(roles.length, ROLES_PER_EMBED * MAX_EMBEDS);
+  if (roles.length > shown) {
+    embeds[embeds.length - 1].setFooter({
+      text: `Showing ${shown} of ${roles.length} roles`,
+    });
+  } else {
+    embeds[embeds.length - 1].setFooter({
+      text: `${roles.length} role${roles.length === 1 ? '' : 's'}`,
+    });
+  }
+
+  return embeds;
 }
 
 /** @deprecated use fetchGuildRolesApi — kept for older call sites */

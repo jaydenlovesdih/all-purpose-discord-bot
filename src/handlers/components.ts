@@ -78,6 +78,12 @@ import {
   isUnbanAllRunning,
   pendingUnbanAlls,
 } from '../utils/unbanAll.js';
+import {
+  executeAnnounceDm,
+  isAnnounceRunning,
+  pendingAnnounces,
+} from '../utils/announceDm.js';
+import { getCachedGuildRoles } from '../utils/permissionRoles.js';
 
 const pendingSuggestArgs = new Map<
   string,
@@ -306,34 +312,30 @@ export async function handleComponent(
     if (dir === 'prev') page -= 1;
     if (dir === 'next') page += 1;
 
-    const roles = await fetchGuildRolesApi(interaction);
+    let roles = (await fetchGuildRolesApi(interaction)) ?? [];
+    if (!roles.length) {
+      roles = getCachedGuildRoles(interaction.guildId);
+    }
+
     const plain = wantsPlainRoleReply(interaction);
     const guildName =
       interaction.guild?.name ??
       interaction.client.guilds.cache.get(interaction.guildId)?.name ??
       'this server';
+    const guildIcon =
+      interaction.guild?.iconURL({ size: 256 }) ??
+      interaction.client.guilds.cache.get(interaction.guildId)?.iconURL({ size: 256 }) ??
+      null;
 
-    if (!roles?.length) {
-      if (plain) {
-        await interaction.update({
-          content: [
-            `**Roles — ${guildName}**`,
-            '',
-            'Use the dropdown to browse roles.',
-          ].join('\n'),
-          embeds: [],
-          components: [buildRoleBrowseRow(interaction.user.id)],
-        });
-        return true;
-      }
+    if (!roles.length) {
       await interaction.update({
         embeds: [
-          new EmbedBuilder()
-            .setColor(Colors.success)
-            .setTitle('Roles')
-            .setDescription('Use the dropdown to browse roles — Discord fills it from this server.'),
+          fail(
+            interaction.user,
+            'Could not load roles for this server. Invite the bot here to paginate roles.',
+          ),
         ],
-        components: [buildRoleBrowseRow(interaction.user.id)],
+        components: [],
       });
       return true;
     }
@@ -351,7 +353,12 @@ export async function handleComponent(
       return true;
     }
 
-    const { embed, page: safePage, totalPages } = buildRolesListEmbed(roles, guildName, page);
+    const { embed, page: safePage, totalPages } = buildRolesListEmbed(
+      roles,
+      guildName,
+      page,
+      guildIcon,
+    );
     await interaction.update({
       embeds: [embed],
       components: [
@@ -394,7 +401,7 @@ export async function handleComponent(
       collected,
     });
 
-    const { content } = buildCollectedRolesText(collected, guildName, 0);
+    const { content } = buildCollectedRolesText(collected, guildName);
     await interaction.update({
       content,
       embeds: [],
@@ -432,7 +439,7 @@ export async function handleComponent(
       collected: [],
     });
 
-    const { content } = buildCollectedRolesText([], guildName, 0);
+    const { content } = buildCollectedRolesText([], guildName);
     await interaction.update({
       content,
       embeds: [],
@@ -1053,6 +1060,122 @@ export async function handleComponent(
                 `❌ **Failed:** ${result.failed}`,
                 '',
                 `Reason: ${pending.reason}`,
+              ].join('\n'),
+            )
+            .setTimestamp(),
+        ],
+        components: [],
+      });
+      return true;
+    }
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('announce:')) {
+    if (!interaction.inGuild()) return true;
+
+    const pending = pendingAnnounces.get(interaction.message.id);
+    if (!pending) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'This announcement confirmation expired — run the command again')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (interaction.user.id !== pending.ownerId && !canBypass(interaction.user.id)) {
+      await interaction.reply({
+        embeds: [fail(interaction.user, 'Only the person who ran announce can confirm')],
+        ephemeral: true,
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'announce:cancel') {
+      pendingAnnounces.delete(interaction.message.id);
+      await interaction.update({
+        embeds: [fail(interaction.user, 'Announcement DM cancelled')],
+        components: [],
+      });
+      return true;
+    }
+
+    if (interaction.customId === 'announce:confirm') {
+      const guild = interaction.guild!;
+      if (guild.id !== pending.guildId) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'Wrong server for this confirmation')],
+          ephemeral: true,
+        });
+        return true;
+      }
+
+      if (isAnnounceRunning(guild.id)) {
+        await interaction.reply({
+          embeds: [fail(interaction.user, 'An announcement DM is already running')],
+          ephemeral: true,
+        });
+        return true;
+      }
+
+      pendingAnnounces.delete(interaction.message.id);
+
+      await interaction.update({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(Colors.success)
+            .setTitle(`${bolt()} Announcement DM`)
+            .setDescription('Fetching members and starting paced DMs across bots…')
+            .setTimestamp(),
+        ],
+        components: [],
+      });
+
+      const result = await executeAnnounceDm(guild, pending.message, async ({ processed, total, sent, failed, skipped }) => {
+        await interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(Colors.success)
+              .setTitle(`${bolt()} Announcement DM In Progress`)
+              .setDescription(
+                [
+                  'Sending DMs in parallel across bots…',
+                  '',
+                  `**Progress:** ${processed}/${total}`,
+                  `✅ Sent: **${sent}**`,
+                  `🔕 DMs closed: **${skipped}**`,
+                  `❌ Failed: **${failed}**`,
+                  '',
+                  'Run `announce cancel` to stop early.',
+                ].join('\n'),
+              )
+              .setTimestamp(),
+          ],
+          components: [],
+        });
+      });
+
+      if (result.total === 0) {
+        await interaction.editReply({
+          embeds: [fail(interaction.user, 'Could not start — no members or no bots in server')],
+          components: [],
+        });
+        return true;
+      }
+
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(result.cancelled ? Colors.error : Colors.success)
+            .setTitle(`${bolt()} Announcement DM ${result.cancelled ? 'Stopped' : 'Complete'}`)
+            .setDescription(
+              [
+                result.cancelled
+                  ? `Stopped after **${result.sent + result.failed + result.skipped}** of **${result.total}** members.`
+                  : `Finished DMing **${result.total}** member${result.total === 1 ? '' : 's'}.`,
+                '',
+                `✅ **Sent:** ${result.sent}`,
+                `🔕 **DMs closed:** ${result.skipped}`,
+                `❌ **Failed:** ${result.failed}`,
               ].join('\n'),
             )
             .setTimestamp(),
