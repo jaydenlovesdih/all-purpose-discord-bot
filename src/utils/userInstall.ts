@@ -401,6 +401,9 @@ export interface PendingRolesBrowseView {
   guildName: string;
   /** Roles collected via Role Select when the bot cannot GET /guilds/:id/roles */
   collected: RoleLike[];
+  /** True when the list came from REST / guild cache (full server list) */
+  fromApi: boolean;
+  page: number;
 }
 
 export const pendingRolesBrowseViews = new Map<string, PendingRolesBrowseView>();
@@ -419,10 +422,38 @@ export function buildRoleBrowseRow(
   return new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
     new RoleSelectMenuBuilder()
       .setCustomId(multi ? `roles:list:${ownerId}` : `roles:pick:${ownerId}`)
-      .setPlaceholder(multi ? 'Select roles to list (up to 25)' : 'Pick a role to view')
+      .setPlaceholder(multi ? 'Choose roles from the server list…' : 'Pick a role to inspect')
       .setMinValues(1)
       .setMaxValues(multi ? 25 : 1),
   );
+}
+
+export function buildRolesPageComponents(
+  page: number,
+  totalPages: number,
+  ownerId: string,
+  opts?: { loadMore?: boolean; inspect?: boolean },
+): ActionRowBuilder<ButtonBuilder | RoleSelectMenuBuilder>[] {
+  const rows: ActionRowBuilder<ButtonBuilder | RoleSelectMenuBuilder>[] = [
+    buildRolesNavButtons(page, totalPages, ownerId),
+  ];
+  if (opts?.loadMore) {
+    rows.push(buildRoleBrowseRow(ownerId, { multi: true }));
+  }
+  if (opts?.inspect !== false) {
+    rows.push(buildRoleBrowseRow(ownerId));
+  }
+  return rows;
+}
+
+export function buildRolesBootstrapText(guildName: string): string {
+  return [
+    `**Roles — ${guildName}**`,
+    '',
+    'Use the menu below — Discord lists **every role** in this server.',
+    'Pick up to **25** at a time; they load into the paginated list (10 per page, Next/Prev).',
+    'Repeat if the server has more than 25 roles.',
+  ].join('\n');
 }
 
 export function buildRolesBrowseActions(ownerId: string): ActionRowBuilder<ButtonBuilder> {
