@@ -14,6 +14,7 @@ import {
   type RoleLike,
   wantsPlainRoleReply,
 } from './userInstall.js';
+import { getPersistedGuildRoles } from './guildRolesCache.js';
 
 export interface PermissionChoice {
   key: string;
@@ -45,6 +46,7 @@ export function cacheGuildRoles(guildId: string | null | undefined, roles: RoleL
   for (const role of roles) {
     map.set(role.id, role);
   }
+  void import('./guildRolesCache.js').then(({ persistGuildRoles }) => persistGuildRoles(guildId, roles));
 }
 
 export function getCachedGuildRoles(guildId: string | null | undefined): RoleLike[] {
@@ -326,6 +328,12 @@ export async function loadRolesForPermissionCheck(
   if (apiRoles?.length) {
     cacheGuildRoles(interaction.guildId, apiRoles);
     return { roles: apiRoles, guildName, fromApi: true };
+  }
+
+  const persisted = getPersistedGuildRoles(interaction.guildId ?? '');
+  if (persisted.length) {
+    cacheGuildRoles(interaction.guildId, persisted);
+    return { roles: persisted, guildName, fromApi: false };
   }
 
   const cached = getCachedGuildRoles(interaction.guildId);

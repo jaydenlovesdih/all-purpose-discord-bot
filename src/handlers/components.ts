@@ -36,9 +36,6 @@ import {
   buildRoleInfoEmbed,
   buildRoleInfoText,
   buildRolePermComponents,
-  buildRolesListEmbed,
-  buildRolesListText,
-  buildRolesNavButtons,
   fetchGuildRolesApi,
   pendingRolePermViews,
   rememberRolePermView,
@@ -46,6 +43,8 @@ import {
   wantsPlainRoleReply,
   type RolePermViewMode,
 } from '../utils/userInstall.js';
+import { loadGuildRolesForBrowse } from '../utils/guildRolesCache.js';
+import { buildRolesButtons, buildRolesEmbedFromList } from '../utils/rolesList.js';
 import {
   buildPermissionPromptText,
   buildPermissionRolesComponents,
@@ -307,8 +306,7 @@ export async function handleComponent(
     if (dir === 'prev') page -= 1;
     if (dir === 'next') page += 1;
 
-    const roles = (await fetchGuildRolesApi(interaction)) ?? [];
-    const plain = wantsPlainRoleReply(interaction);
+    const roles = await loadGuildRolesForBrowse(interaction);
     const guildName =
       interaction.guild?.name ??
       interaction.client.guilds.cache.get(interaction.guildId)?.name ??
@@ -326,25 +324,27 @@ export async function handleComponent(
       return true;
     }
 
-    if (plain) {
-      const { content, page: safePage, totalPages } = buildRolesListText(roles, guildName, page);
-      await interaction.update({
-        content,
-        embeds: [],
-        components: [buildRolesNavButtons(safePage, totalPages, interaction.user.id)],
-      });
-      return true;
-    }
+    const guild = interaction.guild ?? interaction.client.guilds.cache.get(interaction.guildId);
+    const list = roles.map((r) => {
+      const live = guild?.roles.cache.get(r.id);
+      return {
+        id: r.id,
+        name: r.name,
+        color: r.color,
+        hexColor: r.hexColor ?? live?.hexColor,
+        memberCount: live?.members.size,
+      };
+    });
 
-    const { embed, page: safePage, totalPages } = buildRolesListEmbed(
-      roles,
+    const { embed, page: safePage, totalPages } = buildRolesEmbedFromList(
+      list,
       guildName,
       page,
       guildIcon,
     );
     await interaction.update({
       embeds: [embed],
-      components: [buildRolesNavButtons(safePage, totalPages, interaction.user.id)],
+      components: buildRolesButtons(safePage, totalPages, interaction.user.id),
     });
     return true;
   }

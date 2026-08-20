@@ -83,6 +83,23 @@ export async function fetchGuildRolesApi(
 
   const interactionGuild = 'guild' in source ? source.guild : null;
 
+  if (interactionGuild && interactionGuild.roles.cache.size > 1) {
+    return [...interactionGuild.roles.cache.values()]
+      .filter((r) => r.id !== interactionGuild.id)
+      .sort((a, b) => b.position - a.position)
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        permissions: r.permissions.bitfield.toString(),
+        position: r.position,
+        color: r.color,
+        hoist: r.hoist,
+        managed: r.managed,
+        mentionable: r.mentionable,
+        hexColor: r.hexColor,
+      }));
+  }
+
   // Prefer REST so user-install interactions still get a full list when the bot is in the guild
   try {
     const raw = (await client.rest.get(Routes.guildRoles(guildId))) as APIRole[];

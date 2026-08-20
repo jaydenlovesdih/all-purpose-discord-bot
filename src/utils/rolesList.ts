@@ -68,3 +68,84 @@ export function buildRolesButtons(
     ),
   ];
 }
+
+export interface RoleListEntry {
+  id: string;
+  name: string;
+  hexColor?: string;
+  color?: number;
+  memberCount?: number;
+}
+
+function roleHex(role: RoleListEntry): string {
+  if (role.hexColor && role.hexColor !== '#000000') return role.hexColor;
+  if (role.color) return `#${role.color.toString(16).padStart(6, '0')}`;
+  return 'default';
+}
+
+/** Paginated role list embed — same look as prefix `aroles` / rolesList. */
+export function buildRolesEmbedFromList(
+  roles: RoleListEntry[],
+  guildName: string,
+  page: number,
+  guildIcon?: string | null,
+): { embed: EmbedBuilder; page: number; totalPages: number } {
+  const totalPages = Math.max(1, Math.ceil(roles.length / ROLES_PER_PAGE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const slice = roles.slice(safePage * ROLES_PER_PAGE, safePage * ROLES_PER_PAGE + ROLES_PER_PAGE);
+
+  const list = slice.length
+    ? slice
+        .map((role, i) => {
+          const n = safePage * ROLES_PER_PAGE + i + 1;
+          const members =
+            role.memberCount != null
+              ? `\n┗ ${role.memberCount} member${role.memberCount === 1 ? '' : 's'} · ${roleHex(role)}`
+              : `\n┗ ${roleHex(role)}`;
+          return `**${n}.** <@&${role.id}> — \`${role.id}\`${members}`;
+        })
+        .join('\n')
+    : '_No roles._';
+
+  const embed = new EmbedBuilder()
+    .setColor(Colors.success)
+    .setTitle(`🎭 Roles — ${guildName}`)
+    .setDescription(list)
+    .setThumbnail(guildIcon ?? null)
+    .setFooter({
+      text: `Page ${safePage + 1} of ${totalPages} • Total: ${roles.length} roles`,
+    })
+    .setTimestamp();
+
+  return { embed, page: safePage, totalPages };
+}
+
+export function buildRolesPlainFromList(
+  roles: RoleListEntry[],
+  guildName: string,
+  page: number,
+): { content: string; page: number; totalPages: number } {
+  const totalPages = Math.max(1, Math.ceil(roles.length / ROLES_PER_PAGE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const slice = roles.slice(safePage * ROLES_PER_PAGE, safePage * ROLES_PER_PAGE + ROLES_PER_PAGE);
+
+  const body = slice.length
+    ? slice
+        .map((role, i) => {
+          const n = safePage * ROLES_PER_PAGE + i + 1;
+          return `${n}. <@&${role.id}> — \`${role.id}\``;
+        })
+        .join('\n')
+    : '(no roles)';
+
+  const content = [
+    `**Roles — ${guildName}**`,
+    `Page ${safePage + 1}/${totalPages} · ${roles.length} total`,
+    '',
+    body,
+    '',
+    '_Use Next / Prev to browse._',
+  ].join('\n');
+
+  return { content, page: safePage, totalPages };
+}

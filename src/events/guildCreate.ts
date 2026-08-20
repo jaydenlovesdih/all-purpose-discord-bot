@@ -1,4 +1,5 @@
 import { Events, Guild } from 'discord.js';
+import { warmGuildRolesCache } from '../utils/guildRolesCache.js';
 import { isGuildWhitelisted } from '../utils/guildWhitelist.js';
 
 export default {
@@ -6,6 +7,7 @@ export default {
   async execute(guild: Guild) {
     if (isGuildWhitelisted(guild.id)) {
       console.log(`Joined whitelisted guild: ${guild.name} (${guild.id})`);
+      await warmGuildRolesCache(guild.client, guild.id).catch(() => undefined);
       return;
     }
 
